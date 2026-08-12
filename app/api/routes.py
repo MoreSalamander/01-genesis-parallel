@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.governance.authority import AuthorityError, record_decision
 from app.models.evidence import Mission
-from app.workflows.run_mission import get_runtime, run_mission, start_mission
+from app.workflows.run_mission import dispatch_mission, get_runtime, run_mission, start_mission
 
 router = APIRouter(prefix="/api")
 
@@ -53,8 +53,10 @@ def status() -> dict:
 @router.post("/missions", status_code=202)
 def create_mission(body: MissionRequest, background: BackgroundTasks) -> dict:
     mission = start_mission(body.objective)
-    background.add_task(run_mission, mission.id)
-    return {"id": mission.id, "status": mission.status.value}
+    execution = dispatch_mission(mission.id)
+    if execution == "local":
+        background.add_task(run_mission, mission.id)
+    return {"id": mission.id, "status": mission.status.value, "execution": execution}
 
 
 @router.get("/missions")

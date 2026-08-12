@@ -75,3 +75,26 @@ def run_mission(mission_id: str) -> None:
     if mission is not None:
         runtime.executive.run(mission)
         runtime.working.put(mission)  # durable checkpoint
+
+
+def dispatch_mission(mission_id: str) -> str:
+    """Start the durable MissionWorkflow; 'local' on surfaced fallback."""
+    if settings.force_mock:
+        return "local"
+    try:
+        import asyncio
+
+        from temporalio.client import Client
+
+        async def go():
+            client = await Client.connect(settings.temporal_address)
+            await client.start_workflow(
+                "MissionWorkflow", mission_id,
+                id=f"msn-wf-{mission_id}", task_queue=settings.temporal_task_queue,
+            )
+
+        asyncio.run(go())
+        return "temporal"
+    except Exception as err:
+        print(f"[workflow] Temporal dispatch failed ({err}) — DEGRADED: in-process execution")
+        return "local"

@@ -35,6 +35,12 @@ class Settings:
     )
     nats_url: str = field(default_factory=lambda: os.getenv("NATS_URL", "nats://localhost:4223").strip())
     nats_subject: str = field(default_factory=lambda: os.getenv("NATS_SUBJECT", "genesis.signal.events").strip())
+    temporal_address: str = field(
+        default_factory=lambda: os.getenv("TEMPORAL_ADDRESS", "localhost:7233").strip()
+    )
+    temporal_task_queue: str = field(
+        default_factory=lambda: os.getenv("TEMPORAL_TASK_QUEUE", "genesis-signal-missions").strip()
+    )
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("GENESIS_DATA_DIR", "./data")))
     force_mock: bool = field(default_factory=lambda: _truthy(os.getenv("GENESIS_MOCK")))
 

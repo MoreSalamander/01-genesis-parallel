@@ -54,16 +54,19 @@ class SignalIntelligenceExecutive:
             self._verify(mission)
             self._build_knowledge(mission)
             self._synthesize(mission)
-            mission.status = MissionStatus.RECOMMENDED
-            mission.stage("RECOMMENDED", mission.recommendation.action if mission.recommendation else "")
-            self.episodic.record(mission)
-            self.bus.emit("intelligence.completed", mission_id=mission.id, objective=mission.objective,
-                          verified=len(mission.verified_claims), conflicted=len(mission.conflicted_claims))
+            self.complete(mission)
         except ParallelUnavailable as err:
             self._incomplete(mission, f"External research unavailable: {err}")
         except Exception as err:  # agent failure → mark, never fabricate (§12)
             self._incomplete(mission, f"Agent failure: {err}")
         return mission
+
+    def complete(self, mission: Mission) -> None:
+        mission.status = MissionStatus.RECOMMENDED
+        mission.stage("RECOMMENDED", mission.recommendation.action if mission.recommendation else "")
+        self.episodic.record(mission)
+        self.bus.emit("intelligence.completed", mission_id=mission.id, objective=mission.objective,
+                      verified=len(mission.verified_claims), conflicted=len(mission.conflicted_claims))
 
     # -- stages ---------------------------------------------------------------
     def _plan(self, mission: Mission) -> None:

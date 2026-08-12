@@ -20,5 +20,24 @@ services:
     command: ["-js"]
     ports: ["4223:4222"]
 
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: genesis
+      POSTGRES_PWD: genesis
+      POSTGRES_SEEDS: postgres
+    ports: ["7233:7233"]
+    depends_on: [postgres]
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:8233
+    ports: ["8233:8080"]
+    depends_on: [temporal]
+
 volumes:
   pgdata_signal:
