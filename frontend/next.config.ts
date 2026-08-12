@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
 
-const API = process.env.GENESIS_API_URL ?? "http://127.0.0.1:8000";
-
+// API calls are proxied at runtime by app/api/[...path]/route.ts using
+// GENESIS_API_URL — no build-time backend coupling.
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API}/api/:path*` }];
-  },
+  output: "standalone",
 };
 
 export default nextConfig;

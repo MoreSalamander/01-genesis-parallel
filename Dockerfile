@@ -1,6 +1,6 @@
 # Genesis OS — Signal Intelligence backend (Cloud Run)
-# Build from the repository root:
-#   docker build -f infrastructure/cloud-run/Dockerfile -t genesis-parallel .
+# Lives at the repo root so `gcloud run deploy --source .` finds it.
+#   docker build -t genesis-parallel .
 FROM python:3.12-slim
 
 WORKDIR /srv
