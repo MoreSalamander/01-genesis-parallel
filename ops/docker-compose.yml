@@ -1,0 +1,24 @@
+name: genesis-signal
+# Genesis OS — Signal Intelligence · owned infrastructure (production posture).
+#   docker compose up -d
+# PostgreSQL  : durable mission/decision state        localhost:5433
+# NATS        : event fabric (genesis.signal.events)  localhost:4223
+# (DataHub GMS is an external substrate at localhost:8080 — quickstart stack.)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: genesis
+      POSTGRES_PASSWORD: genesis
+      POSTGRES_DB: genesis_signal
+    ports: ["5433:5432"]
+    volumes:
+      - pgdata_signal:/var/lib/postgresql/data
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js"]
+    ports: ["4223:4222"]
+
+volumes:
+  pgdata_signal:

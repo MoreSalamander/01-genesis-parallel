@@ -80,6 +80,7 @@ def decide(mission_id: str, body: DecisionRequest) -> dict:
         record_decision(mission, body.decision, runtime.bus)
     except AuthorityError as err:
         raise HTTPException(400, str(err)) from err
+    runtime.working.put(mission)  # durable checkpoint
     return _summary(mission)
 
 

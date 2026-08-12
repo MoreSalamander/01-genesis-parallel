@@ -27,7 +27,14 @@ class Settings:
     use_vertex: bool = field(default_factory=lambda: _truthy(os.getenv("GOOGLE_GENAI_USE_VERTEXAI")))
     google_project: str = field(default_factory=lambda: os.getenv("GOOGLE_CLOUD_PROJECT", "").strip())
     gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip())
-    datahub_gms_url: str = field(default_factory=lambda: os.getenv("DATAHUB_GMS_URL", "").strip())
+    datahub_gms_url: str = field(default_factory=lambda: os.getenv("DATAHUB_GMS_URL", "http://localhost:8080").strip())
+    postgres_dsn: str = field(
+        default_factory=lambda: os.getenv(
+            "POSTGRES_DSN", "postgresql://genesis:genesis@localhost:5433/genesis_signal"
+        ).strip()
+    )
+    nats_url: str = field(default_factory=lambda: os.getenv("NATS_URL", "nats://localhost:4223").strip())
+    nats_subject: str = field(default_factory=lambda: os.getenv("NATS_SUBJECT", "genesis.signal.events").strip())
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("GENESIS_DATA_DIR", "./data")))
     force_mock: bool = field(default_factory=lambda: _truthy(os.getenv("GENESIS_MOCK")))
 

@@ -13,23 +13,46 @@ from app.models.evidence import Mission
 
 
 class WorkingMemory:
-    """Current missions, in-process."""
+    """Write-through cache over the durable document store (PostgreSQL)."""
 
-    def __init__(self):
+    def __init__(self, store):
+        self._store = store
         self._missions: dict[str, Mission] = {}
         self._lock = threading.Lock()
 
     def put(self, mission: Mission) -> None:
         with self._lock:
             self._missions[mission.id] = mission
+        try:
+            self._store.upsert("mission", mission.id, mission.status.value, False,
+                               mission.model_dump(mode="json"))
+        except Exception as err:
+            print(f"[state] durable persist failed for {mission.id}: {err}")
 
     def get(self, mission_id: str) -> Mission | None:
         with self._lock:
-            return self._missions.get(mission_id)
+            cached = self._missions.get(mission_id)
+        if cached is not None:
+            return cached
+        doc = self._store.fetch("mission", mission_id)
+        if doc is None:
+            return None
+        mission = Mission.model_validate(doc)
+        with self._lock:
+            self._missions[mission.id] = mission
+        return mission
 
     def all(self) -> list[Mission]:
+        merged: dict[str, Mission] = {}
+        for doc in self._store.list("mission", limit=100):
+            try:
+                mission = Mission.model_validate(doc)
+                merged[mission.id] = mission
+            except Exception:
+                continue
         with self._lock:
-            return sorted(self._missions.values(), key=lambda m: m.created_at, reverse=True)
+            merged.update(self._missions)  # live in-flight objects win
+        return sorted(merged.values(), key=lambda m: m.created_at, reverse=True)
 
 
 class EpisodicMemory:
