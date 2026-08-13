@@ -6,7 +6,10 @@ import { getStatus, SystemStatus } from "@/lib/api";
 export default function Header() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   useEffect(() => {
-    getStatus().then(setStatus).catch(() => setStatus(null));
+    const load = () => getStatus().then(setStatus).catch(() => setStatus(null));
+    load();
+    const timer = setInterval(load, 5000);  // self-heal when the backend comes up
+    return () => clearInterval(timer);
   }, []);
   return (
     <header className="masthead">
