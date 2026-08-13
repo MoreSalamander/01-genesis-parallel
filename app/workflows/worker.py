@@ -15,6 +15,9 @@ from app.workflows.temporal_workflows import MissionWorkflow
 
 
 async def main() -> None:
+    from app.observability.tracing import setup_tracing
+
+    setup_tracing(settings, "genesis-signal-worker")
     client = await Client.connect(settings.temporal_address)
     print(f"[worker] connected to Temporal at {settings.temporal_address} · "
           f"queue={settings.temporal_task_queue}", flush=True)

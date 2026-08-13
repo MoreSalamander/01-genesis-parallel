@@ -52,6 +52,14 @@ def status() -> dict:
 
 @router.post("/missions", status_code=202)
 def create_mission(body: MissionRequest, background: BackgroundTasks) -> dict:
+    from app.memory.ephemeral import MISSION_RATE_KEY, MISSION_RATE_LIMIT, MISSION_RATE_WINDOW_S
+
+    runtime = get_runtime()
+    if not runtime.ephemeral.allow_rate(MISSION_RATE_KEY, MISSION_RATE_LIMIT, MISSION_RATE_WINDOW_S):
+        raise HTTPException(
+            429, f"mission launch rate limit reached ({MISSION_RATE_LIMIT}/{MISSION_RATE_WINDOW_S}s) — "
+                 "protecting Parallel/Gemini quotas"
+        )
     mission = start_mission(body.objective)
     execution = dispatch_mission(mission.id)
     if execution == "local":

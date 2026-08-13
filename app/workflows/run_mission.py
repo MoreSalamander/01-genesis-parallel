@@ -29,10 +29,14 @@ class Runtime:
     episodic: EpisodicMemory
     knowledge: LocalGraphStore
     executive: SignalIntelligenceExecutive
+    ephemeral: object = None
 
 
 @lru_cache(maxsize=1)
 def get_runtime() -> Runtime:
+    from app.observability.tracing import setup_tracing
+
+    setup_tracing(settings, "genesis-signal")
     bus = EventBus(
         settings.data_dir,
         nats_url="" if settings.force_mock else settings.nats_url,
@@ -55,10 +59,12 @@ def get_runtime() -> Runtime:
         bus=bus,
     )
     from app.memory.durable import get_store
+    from app.memory.ephemeral import get_ephemeral
 
     return Runtime(
         settings=settings, bus=bus, working=WorkingMemory(get_store(settings)),
         episodic=episodic, knowledge=knowledge, executive=executive,
+        ephemeral=get_ephemeral(settings),
     )
 
 

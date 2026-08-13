@@ -44,7 +44,13 @@ class ParallelSearchTool:
     ) -> list[SearchResult]:
         if self._client is None:
             return _mock_search(queries, max_results)
-        return self._live_search(objective, queries, max_results, session_id)
+        from app.observability.tracing import span
+
+        with span("parallel.search", objective=objective[:120], queries=len(queries)) as sp:
+            results = self._live_search(objective, queries, max_results, session_id)
+            if sp is not None:
+                sp.set_attribute("results", len(results))
+            return results
 
     def _live_search(
         self, objective: str, queries: list[str], max_results: int, session_id: str | None

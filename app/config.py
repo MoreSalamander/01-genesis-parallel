@@ -41,6 +41,7 @@ class Settings:
     temporal_task_queue: str = field(
         default_factory=lambda: os.getenv("TEMPORAL_TASK_QUEUE", "genesis-signal-missions").strip()
     )
+    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6380/0").strip())
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("GENESIS_DATA_DIR", "./data")))
     force_mock: bool = field(default_factory=lambda: _truthy(os.getenv("GENESIS_MOCK")))
 

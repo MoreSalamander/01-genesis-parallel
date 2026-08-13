@@ -20,6 +20,10 @@ services:
     command: ["-js"]
     ports: ["4223:4222"]
 
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+
   temporal:
     image: temporalio/auto-setup:1.25.2
     environment:
