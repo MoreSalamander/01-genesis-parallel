@@ -47,6 +47,11 @@ def get_runtime() -> Runtime:
     knowledge = LocalGraphStore(settings.data_dir)
     datahub = DataHubEmitter(settings)
     episodic = EpisodicMemory(settings.data_dir)
+    from app.knowledge.graph import WorldGraph
+    from app.knowledge.objects import EvidenceObjectStore
+    from app.knowledge.search import EvidenceSearch
+    from app.knowledge.semantic import SemanticMemory
+
     executive = SignalIntelligenceExecutive(
         cognition=cognition,
         parallel_tool=parallel_tool,
@@ -57,6 +62,10 @@ def get_runtime() -> Runtime:
         datahub=datahub,
         episodic=episodic,
         bus=bus,
+        objects=EvidenceObjectStore(settings),
+        searcher=EvidenceSearch(settings),
+        semantic=SemanticMemory(settings),
+        worldgraph=WorldGraph(settings),
     )
     from app.memory.durable import get_store
     from app.memory.ephemeral import get_ephemeral

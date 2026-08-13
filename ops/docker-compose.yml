@@ -24,6 +24,38 @@ services:
     image: redis:7-alpine
     ports: ["6380:6379"]
 
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports: ["6333:6333"]
+    volumes:
+      - qdrant_signal:/qdrant/storage
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: genesis
+      MINIO_ROOT_PASSWORD: genesis-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - minio_signal:/data
+
+  opensearch:
+    image: opensearchproject/opensearch:2.17.1
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["9201:9200"]
+
+  neo4j:
+    image: neo4j:5.24-community
+    environment:
+      NEO4J_AUTH: neo4j/genesis-secret
+    ports: ["7474:7474", "7687:7687"]
+    volumes:
+      - neo4j_signal:/data
+
   temporal:
     image: temporalio/auto-setup:1.25.2
     environment:
@@ -45,3 +77,6 @@ services:
 
 volumes:
   pgdata_signal:
+  qdrant_signal:
+  minio_signal:
+  neo4j_signal:

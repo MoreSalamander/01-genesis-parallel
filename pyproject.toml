@@ -20,6 +20,10 @@ dependencies = [
     "redis>=5.0",
     "opentelemetry-sdk>=1.25",
     "opentelemetry-exporter-gcp-trace>=1.6",
+    "qdrant-client>=1.12",
+    "minio>=7.2",
+    "opensearch-py>=2.6",
+    "neo4j>=5.24",
 ]
 
 [project.optional-dependencies]

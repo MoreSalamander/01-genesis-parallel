@@ -42,6 +42,17 @@ class Settings:
         default_factory=lambda: os.getenv("TEMPORAL_TASK_QUEUE", "genesis-signal-missions").strip()
     )
     redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6380/0").strip())
+    qdrant_url: str = field(default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333").strip())
+    embed_model: str = field(default_factory=lambda: os.getenv("EMBED_MODEL", "gemini-embedding-001").strip())
+    minio_endpoint: str = field(default_factory=lambda: os.getenv("MINIO_ENDPOINT", "localhost:9000").strip())
+    minio_access_key: str = field(default_factory=lambda: os.getenv("MINIO_ACCESS_KEY", "genesis").strip())
+    minio_secret_key: str = field(default_factory=lambda: os.getenv("MINIO_SECRET_KEY", "genesis-secret").strip())
+    opensearch_url: str = field(
+        default_factory=lambda: os.getenv("OPENSEARCH_URL", "http://localhost:9201").strip()
+    )
+    neo4j_uri: str = field(default_factory=lambda: os.getenv("NEO4J_URI", "bolt://localhost:7687").strip())
+    neo4j_user: str = field(default_factory=lambda: os.getenv("NEO4J_USER", "neo4j").strip())
+    neo4j_password: str = field(default_factory=lambda: os.getenv("NEO4J_PASSWORD", "genesis-secret").strip())
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("GENESIS_DATA_DIR", "./data")))
     force_mock: bool = field(default_factory=lambda: _truthy(os.getenv("GENESIS_MOCK")))
 

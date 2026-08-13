@@ -99,6 +99,25 @@ def knowledge_entities() -> dict:
     return get_runtime().knowledge.entities()
 
 
+@router.get("/evidence/search")
+def evidence_search(q: str, limit: int = 10) -> list[dict]:
+    """Full-text institutional recall across all missions (OpenSearch)."""
+    return get_runtime().executive.searcher.search(q, limit)
+
+
+@router.get("/evidence/similar")
+def evidence_similar(q: str, limit: int = 5) -> list[dict]:
+    """Semantic recall — 'have we seen a signal like this before?' (Qdrant + Gemini embeddings)."""
+    return get_runtime().executive.semantic.similar(q, limit)
+
+
+@router.get("/knowledge/graph")
+def knowledge_graph(entity: str = "", limit: int = 25) -> list[dict]:
+    """World-model traversal (Neo4j): entity neighborhood, or top entities when unspecified."""
+    graph = get_runtime().executive.worldgraph
+    return graph.neighborhood(entity, limit) if entity else graph.entities(limit)
+
+
 @router.get("/knowledge/relationships")
 def knowledge_relationships(limit: int = 200) -> list[dict]:
     return get_runtime().knowledge.relationships(limit)

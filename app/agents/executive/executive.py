@@ -36,7 +36,15 @@ class SignalIntelligenceExecutive:
         datahub: DataHubEmitter,
         episodic: EpisodicMemory,
         bus: EventBus,
+        objects=None,      # MinIO raw-evidence store
+        searcher=None,     # OpenSearch evidence index
+        semantic=None,     # Qdrant semantic memory
+        worldgraph=None,   # Neo4j world-model graph
     ):
+        self.objects = objects
+        self.searcher = searcher
+        self.semantic = semantic
+        self.worldgraph = worldgraph
         self.cognition = cognition
         self.parallel = parallel_tool
         self.planner = planner
@@ -91,6 +99,8 @@ class SignalIntelligenceExecutive:
                 mission.sources.append(source)
                 self.bus.emit("signal.discovered", mission_id=mission.id, source_id=source.id,
                               title=source.title, url=source.url, domain=task.domain.value)
+                if self.objects is not None:  # immutable raw evidence (MinIO)
+                    self.objects.put_source(mission.id, source.id, result.model_dump())
                 new_results.append(result)
             if not new_results:
                 continue
@@ -151,6 +161,15 @@ class SignalIntelligenceExecutive:
             detail = f"{len(touched)} entities promoted"
             if self.datahub.available:
                 detail += f" ({mirrored} mirrored to DataHub)"
+            extras = []
+            if self.searcher is not None and self.searcher.available:
+                extras.append(f"{self.searcher.index_mission(mission)} evidence indexed (OpenSearch)")
+            if self.semantic is not None and self.semantic.available:
+                extras.append(f"{self.semantic.upsert_claims(mission)} claims embedded (Qdrant)")
+            if self.worldgraph is not None and self.worldgraph.available:
+                extras.append(f"{self.worldgraph.mirror_mission(mission)} graph assertions (Neo4j)")
+            if extras:
+                detail += " · " + ", ".join(extras)
             mission.stage("KNOWLEDGE UPDATED", detail)
             self.bus.emit("knowledge.updated", mission_id=mission.id, entities=touched)
 
