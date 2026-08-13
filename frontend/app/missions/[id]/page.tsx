@@ -14,6 +14,7 @@ export default function MissionPage() {
   const [mission, setMission] = useState<MissionDetail | null>(null);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [deciding, setDeciding] = useState(false);
+  const [actionNote, setActionNote] = useState("");
 
   const refresh = useCallback(async () => {
     if (!id) return;
@@ -48,8 +49,14 @@ export default function MissionPage() {
   const decide = async (decision: "approved" | "rejected" | "more_research") => {
     if (deciding) return;
     setDeciding(true);
-    try { await decideMission(mission.id, decision); await refresh(); }
-    finally { setDeciding(false); }
+    setActionNote("");
+    try {
+      await decideMission(mission.id, decision);
+      setActionNote(`Decision "${decision}" recorded.`);
+      await refresh();
+    } catch (err) {
+      setActionNote(`Decision failed: ${String(err).slice(0, 200)}`);
+    } finally { setDeciding(false); }
   };
 
   return (
@@ -96,6 +103,7 @@ export default function MissionPage() {
             <div style={{ width: `${Math.round(rec.confidence * 100)}%` }} />
           </div>
           <div className="meter-label">{Math.round(rec.confidence * 100)}% confidence · grounded in {mission.claims.length} claim groups from {mission.sources.length} sources</div>
+          {actionNote && <p className="muted">{actionNote}</p>}
           <div className="row" style={{ marginTop: 14 }}>
             {rec.decision ? (
               <span className="chip accent">Decision recorded: {rec.decision.toUpperCase()} {rec.decided_at ? `· ${new Date(rec.decided_at).toLocaleTimeString()}` : ""}</span>
