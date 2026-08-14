@@ -7,6 +7,7 @@ name: genesis-signal
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: genesis
       POSTGRES_PASSWORD: genesis
@@ -17,21 +18,25 @@ services:
 
   nats:
     image: nats:2.10-alpine
+    restart: unless-stopped
     command: ["-js"]
     ports: ["4223:4222"]
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports: ["6380:6379"]
 
   qdrant:
     image: qdrant/qdrant:v1.12.4
+    restart: unless-stopped
     ports: ["6333:6333"]
     volumes:
       - qdrant_signal:/qdrant/storage
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: genesis
@@ -42,6 +47,7 @@ services:
 
   opensearch:
     image: opensearchproject/opensearch:2.17.1
+    restart: unless-stopped
     environment:
       discovery.type: single-node
       DISABLE_SECURITY_PLUGIN: "true"
@@ -50,6 +56,7 @@ services:
 
   neo4j:
     image: neo4j:5.24-community
+    restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/genesis-secret
     ports: ["7474:7474", "7687:7687"]
@@ -58,6 +65,7 @@ services:
 
   temporal:
     image: temporalio/auto-setup:1.25.2
+    restart: unless-stopped
     environment:
       DB: postgres12
       DB_PORT: "5432"
@@ -69,6 +77,7 @@ services:
 
   temporal-ui:
     image: temporalio/ui:2.31.2
+    restart: unless-stopped
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:8233
