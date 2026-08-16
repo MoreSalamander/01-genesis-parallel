@@ -27,7 +27,7 @@ class DataHubEmitter:
                 # so this stays IDLE until an emit actually lands.
                 runtime_proof.record(
                     "datahub", "IDLE",
-                    f"client ready for {settings.datahub_gms_url}; nothing promoted yet")
+                    f"configured at {settings.datahub_gms_url} — not contacted yet")
             except ImportError:
                 print("[knowledge] DATAHUB_GMS_URL set but acryl-datahub not installed "
                       "(pip install 'genesis-parallel[datahub]') — using local graph store only")
