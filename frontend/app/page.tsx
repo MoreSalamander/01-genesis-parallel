@@ -2,33 +2,73 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ACTIVE_STATUSES, listMissions, startMission, MissionSummary } from "@/lib/api";
+import {
+  ACTIVE_STATUSES, MissionSummary, SystemStatus,
+  getStatus, listMissions, startMission,
+} from "@/lib/api";
 import { MissionChip } from "./components/Chips";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
-import { EmptyState, Rolling, cascade } from "@/lib/alive";
+import { Note, Rolling, VoiceLine, cascade, proofState, useCursorGlow } from "@/lib/alive";
 
-const DEMO_OBJECTIVE = "Find emerging production companies worth monitoring";
+/* The ask surface. Signal Intelligence is the studio's researcher, so the
+   console leads with the question rather than with a form: you ask, it reads
+   the external record through Parallel, and every answer arrives with the
+   sources it stands on and the disagreements it refused to resolve. */
+
+/* Open questions — only offered when Parallel retrieval is actually live,
+   because only then can they be answered from the real external record. */
+const LIVE_STARTERS = [
+  "What does it actually cost to produce a short film in 2026?",
+  "Which festivals matter most for a first feature?",
+  "How do independent studios land distribution deals?",
+  "Who is investing in virtual production right now?",
+  "What are streamers paying for documentaries?",
+  "Find emerging production companies worth monitoring",
+];
+
+/* Without a Parallel key the system reads a small fixed demonstration corpus,
+   so these are the questions it can genuinely answer. Offering the open set
+   here would promise research the system cannot do. */
+const FIXTURE_STARTERS = [
+  "Find emerging production companies worth monitoring",
+  "Which production companies raised funding recently?",
+  "What distribution deals have independent studios signed?",
+  "Which creative leaders changed studios recently?",
+  "Who is building virtual production capacity?",
+];
 
 export default function Board() {
   const router = useRouter();
   const [missions, setMissions] = useState<MissionSummary[]>([]);
-  const [objective, setObjective] = useState(DEMO_OBJECTIVE);
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useCursorGlow();
 
   useEffect(() => {
-    const load = () => listMissions().then(setMissions).catch(() => {});
+    const load = () => {
+      listMissions().then(setMissions).catch(() => {});
+      getStatus().then(setStatus).catch(() => setStatus(null));
+    };
     load();
     const timer = setInterval(load, 2000);
     return () => clearInterval(timer);
   }, []);
 
-  const launch = async () => {
-    if (!objective.trim() || busy) return;
+  // Retrieval breadth is the whole promise here, so the surface only offers
+  // open questions when Parallel can actually go and answer them.
+  const retrieval = proofState(status?.runtime_proof, "parallel", status?.parallel_live ?? false);
+  const liveRetrieval = retrieval === "LIVE";
+  const starters = liveRetrieval ? LIVE_STARTERS : FIXTURE_STARTERS;
+
+  const ask = async (text: string) => {
+    const objective = text.trim();
+    if (objective.length < 8 || busy) return;
     setBusy(true);
     setError("");
     try {
-      const { id } = await startMission(objective.trim());
+      const { id } = await startMission(objective);
       router.push(`/missions/${id}`);
     } catch (err) {
       setError(String(err));
@@ -36,82 +76,74 @@ export default function Board() {
     }
   };
 
-  const signals = missions.reduce((n, m) => n + m.sources, 0);
-  const verified = missions.reduce((n, m) => n + m.verified, 0);
-  const conflicted = missions.reduce((n, m) => n + m.conflicted, 0);
+  const answered = missions.filter((m) => m.has_recommendation);
 
   return (
-    <main>
-      <div className="tiles">
-        <div className="tile"><div className="v"><Rolling value={signals} /></div><div className="l">External signals</div></div>
-        <div className="tile"><div className="v"><Rolling value={missions.length} /></div><div className="l">Missions</div></div>
-        <div className="tile"><div className="v"><Rolling value={verified} /></div><div className="l">Verified claims</div></div>
-        <div className="tile"><div className="v"><Rolling value={conflicted} /></div><div className="l">Conflicts preserved</div></div>
-      </div>
-
-      {missions.length === 0 && (
-        <EmptyState
-          eyebrow="Signal Intelligence · Parallel track"
-          title="External intelligence the studio can actually audit."
-          lead="Give it an objective and the Executive plans research across Market, Talent, Industry
-                and Strategic cognition, retrieves the evidence through Parallel Search, and verifies
-                every claim against its sources. Where sources disagree the conflict is preserved and
-                shown as CONFLICTED — never quietly resolved — and the recommendation comes back to you
-                for authorization."
-          action={
-            <button className="btn approve" onClick={launch} disabled={busy}>
-              {busy ? "Launching…" : `Start here — launch “${DEMO_OBJECTIVE}”`}
-            </button>
-          }
+    <main className="ask-main">
+      <section className="ask">
+        <VoiceLine
+          className="alive-voice-hero"
+          line={liveRetrieval
+            ? "Ask me anything about running a studio. I'll read the external record and show you every source I used — including the ones that disagree."
+            : "I'm running on a small demonstration corpus right now, so I can only answer what's in it. Connect a Parallel key and I'll read the open web instead."}
         />
-      )}
 
-      <section className="panel">
-        <h2>New intelligence mission</h2>
-        <div className="row">
+        <div className="ask-row alive-track">
           <input
+            className="ask-input"
             type="text"
-            value={objective}
-            onChange={(e) => setObjective(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && launch()}
-            placeholder="What should Signal Intelligence investigate?"
-            aria-label="Intelligence objective"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && ask(question)}
+            placeholder="What do you want to know?"
+            aria-label="Ask the studio anything"
+            autoFocus
           />
-          <button className="btn approve" onClick={launch} disabled={busy}>
-            {busy ? "Launching…" : "Launch mission"}
+          <button className="btn approve alive-track" onClick={() => ask(question)}
+                  disabled={busy || question.trim().length < 8}>
+            {busy ? "Reading…" : "Ask"}
           </button>
         </div>
+
+        {!liveRetrieval && (
+          <Note>
+            Demonstration corpus: 8 fixture documents about production companies. Questions outside
+            it return no sources rather than an answer assembled from unrelated ones.
+          </Note>
+        )}
+
+        <div className="starters alive-cascade">
+          {starters.map((s, i) => (
+            <button key={s} className="starter alive-track" style={cascade(i)}
+                    onClick={() => { setQuestion(s); ask(s); }} disabled={busy}>
+              {s}
+            </button>
+          ))}
+        </div>
         {error && <p className="muted">{error}</p>}
-        <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-          The Executive plans research across Market / Talent / Industry / Strategic cognition,
-          retrieves evidence through Parallel Search, verifies claims, and returns a recommendation
-          for your authorization.
-        </p>
       </section>
 
-      <section className="panel">
-        <h2>Missions</h2>
-        {missions.length === 0 ? (
-          <p className="muted">No missions yet — launch one above.</p>
-        ) : (
+      {answered.length > 0 && (
+        <section className="panel alive-raised">
+          <h2>Answers on record <span className="muted">· every number traceable to a source</span></h2>
           <table>
             <thead>
-              <tr><th>Objective</th><th>Status</th><th>Sources</th><th>Verified</th><th>Conflicted</th></tr>
+              <tr><th>Question</th><th>Status</th><th>Sources</th><th>Held up</th><th>Conflicts</th></tr>
             </thead>
             <tbody className="alive-cascade">
               {missions.map((m, i) => (
                 <tr key={m.id} style={cascade(i)}>
                   <td><Link href={`/missions/${m.id}`}>{m.objective}</Link></td>
                   <td><MissionChip status={m.status} running={ACTIVE_STATUSES.has(m.status)} /></td>
-                  <td className="num">{m.sources}</td>
-                  <td className="num">{m.verified}</td>
-                  <td className="num">{m.conflicted}</td>
+                  <td className="num"><Rolling value={m.sources} /></td>
+                  <td className="num"><Rolling value={m.verified} /></td>
+                  <td className="num"><Rolling value={m.conflicted} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </section>
+        </section>
+      )}
 
       <KnowledgeGraph />
     </main>

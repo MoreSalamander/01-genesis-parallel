@@ -167,5 +167,11 @@ def _mock_search(queries: list[str], max_results: int) -> list[SearchResult]:
         score += sum(1 for word in terms.split() if len(word) > 3 and word in hay)
         scored.append((score, doc))
     scored.sort(key=lambda pair: pair[0], reverse=True)
-    picked = [doc for score, doc in scored if score > 0][:max_results] or [doc for _, doc in scored[:max_results]]
+    # Only documents that actually match. The previous `or` fallback returned
+    # the top of the corpus whenever nothing scored, so an off-corpus question
+    # ("what does a short film cost?") came back answered with unrelated
+    # production-company articles — the system inventing relevance, which is the
+    # one thing it promises never to do. An empty result is the honest answer;
+    # the mission then reports that it found no external evidence.
+    picked = [doc for score, doc in scored if score > 0][:max_results]
     return [SearchResult(url=d["url"], title=d["title"], excerpts=d["excerpts"]) for d in picked]

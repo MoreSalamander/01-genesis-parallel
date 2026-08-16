@@ -7,9 +7,23 @@ import {
 } from "@/lib/api";
 import { MissionChip } from "../../components/Chips";
 import { ClaimCards } from "../../components/ClaimCards";
-import { Note, Rolling, cascade } from "@/lib/alive";
+import { Note, Rolling, Stream, VoiceLine, cascade, voiceFor } from "@/lib/alive";
 
 const STATUS_ORDER: Record<string, number> = { VERIFIED: 0, CONFLICTED: 1, UNVERIFIED: 2 };
+
+// The console's own voice. The chips keep the formal state for auditability;
+// these say what the system is doing, in the first person, above them.
+const VOICE: Record<string, string> = {
+  PLANNED: "I've broken this into research tasks. Starting now.",
+  RESEARCHING: "I'm reading the external record — pulling sources through Parallel.",
+  VERIFYING: "I'm checking every claim against the sources that made it.",
+  SYNTHESIZING: "I'm weighing what holds up against what doesn't.",
+  RECOMMENDED: "I've reached a recommendation. I need your decision.",
+  APPROVED: "Recorded — you approved this.",
+  REJECTED: "Recorded — you rejected this.",
+  MORE_RESEARCH_REQUESTED: "Understood. Going back for more evidence.",
+  INCOMPLETE: "I couldn't finish this honestly. Nothing here is fabricated.",
+};
 
 export default function MissionPage() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +84,7 @@ export default function MissionPage() {
           </div>
           <MissionChip status={mission.status} running={running} />
         </div>
+        <VoiceLine line={voiceFor(VOICE, mission.status)} thinking={running} />
         {mission.error && <Note tone="bad">{mission.error}</Note>}
       </section>
 
@@ -110,8 +125,11 @@ export default function MissionPage() {
       {rec && (
         <section className="panel rec">
           <h2>Recommendation — Studio Head authorization required</h2>
-          <p className="action">{rec.action}</p>
-          <p className="rationale">{rec.rationale}</p>
+          {/* Gemini's words, revealed as they would be written. An answer that
+              composes itself reads as cognition; a paragraph that appears reads
+              as a database. Click to skip — never make anyone wait to read. */}
+          <p className="action"><Stream text={rec.action} /></p>
+          <p className="rationale"><Stream text={rec.rationale} /></p>
           <div className="meter" role="img" aria-label={`Confidence ${Math.round(rec.confidence * 100)} percent`}>
             <div style={{ width: `${Math.round(rec.confidence * 100)}%` }} />
           </div>
@@ -140,7 +158,7 @@ export default function MissionPage() {
                 <span className="chip">{f.domain.toUpperCase()}</span>
                 <span className={`chip ${f.strategic_impact === "HIGH" ? "accent" : ""}`}>IMPACT {f.strategic_impact}</span>
               </div>
-              <div className="text">{f.text}</div>
+              <div className="text"><Stream text={f.text} /></div>
             </div>
           ))}
         </section>

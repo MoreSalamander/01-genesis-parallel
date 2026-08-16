@@ -59,6 +59,16 @@ class SignalIntelligenceExecutive:
         try:
             self._plan(mission)
             self._research(mission)
+            if not mission.sources:
+                # Retrieval found nothing on this objective. Continuing would
+                # synthesize a recommendation with no evidence under it, so the
+                # mission stops here and says so (§12: never fabricate).
+                self._incomplete(
+                    mission,
+                    "No external evidence was retrieved for this objective — "
+                    "nothing was inferred in its absence.",
+                )
+                return mission
             self._verify(mission)
             self._build_knowledge(mission)
             self._synthesize(mission)
