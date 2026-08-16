@@ -378,3 +378,95 @@ td.num { font-variant-numeric: tabular-nums; }
   border: 1px solid var(--line); border-radius: 999px;
 }
 .masthead .sub .track:hover { opacity: 1; }
+
+/* ── The constellation: research as bodies in one system ──────────────────
+   Cards flatten simultaneity. These breathe on a shared cycle with staggered
+   phase, so eight lines of enquiry read as one organism working at once. The
+   motion is ambient and claims nothing; only the pulse and the count claim,
+   and both are driven by whether that enquiry has actually reported. */
+.constellation { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: center; }
+@media (max-width: 860px) { .constellation { grid-template-columns: 1fr; } }
+
+.bodies {
+  display: flex; flex-wrap: wrap; gap: 18px 22px;
+  align-items: center; justify-content: center; padding: 18px 6px;
+}
+
+@keyframes body-breathe {
+  0%, 100% { transform: translateY(0)   scale(var(--scale, 1)); }
+  50%      { transform: translateY(-7px) scale(calc(var(--scale, 1) * 1.03)); }
+}
+
+.body {
+  position: relative; display: grid; justify-items: center; gap: 6px;
+  background: none; border: none; padding: 4px; cursor: pointer;
+  font: inherit; color: var(--ink-2);
+  /* One cycle, staggered phase — the shoal effect. */
+  animation: body-breathe 4.8s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -0.6s);
+}
+.body .orb {
+  width: 58px; height: 58px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 33% 28%, color-mix(in srgb, var(--dot) 55%, transparent), transparent 62%),
+    color-mix(in srgb, var(--dot) 14%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--dot) 55%, var(--line));
+  box-shadow: inset 0 -6px 14px -8px #000, 0 8px 20px -14px var(--dot);
+  transition: box-shadow var(--alive-panel) var(--alive-ease),
+              border-color var(--alive-panel) var(--alive-ease);
+}
+.body .label {
+  font: 9.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+}
+.body .count {
+  position: absolute; top: 18px; left: 0; right: 0;
+  font: 700 15px var(--mono); color: var(--ink); text-align: center; pointer-events: none;
+}
+.body:hover .orb, .body:focus-visible .orb, .body.open .orb {
+  border-color: var(--dot);
+  box-shadow: inset 0 -6px 14px -8px #000, 0 0 0 4px color-mix(in srgb, var(--dot) 22%, transparent);
+}
+.body:focus-visible { outline: none; }
+
+/* Still searching — the only thing here that asserts activity. */
+@keyframes body-seek {
+  0%, 100% { box-shadow: inset 0 -6px 14px -8px #000, 0 0 0 0 color-mix(in srgb, var(--dot) 40%, transparent); }
+  50%      { box-shadow: inset 0 -6px 14px -8px #000, 0 0 0 10px transparent; }
+}
+.body.working .orb { animation: body-seek 1.8s var(--alive-ease) infinite; }
+.body.working .count { color: var(--muted); letter-spacing: 0.1em; }
+
+.body.d-market    { --dot: var(--accent); }
+.body.d-talent    { --dot: #4bc6a8; }
+.body.d-industry  { --dot: #9085e9; }
+.body.d-strategic { --dot: var(--warn); }
+
+/* The screen that pops out of the body you are on. */
+.readout {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; min-height: 132px;
+  opacity: 0.55; transform: translateX(-4px);
+  transition: opacity var(--alive-panel) var(--alive-ease),
+              transform var(--alive-panel) var(--alive-ease),
+              border-color var(--alive-panel) var(--alive-ease);
+}
+.readout.shown { opacity: 1; transform: none; border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.readout-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.readout .tag {
+  font: 700 9.5px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dot, var(--accent));
+}
+.readout .n { font: 11px var(--mono); color: var(--muted); }
+.readout .focus { font-size: 13px; line-height: 1.55; margin: 9px 0 0; color: var(--ink); }
+.readout .queries { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.readout .queries li {
+  font: 10px var(--mono); color: var(--muted);
+  border-left: 2px solid var(--line); padding-left: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.readout .hint { font-size: 12.5px; line-height: 1.6; color: var(--muted); margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .body { animation: none; transform: scale(var(--scale, 1)); }
+  .body.working .orb { animation: none; border-style: dashed; }
+  .readout { transition: none; }
+}

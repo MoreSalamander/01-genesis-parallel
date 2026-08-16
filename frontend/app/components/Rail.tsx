@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MissionSummary, listMissions } from "@/lib/api";
+import { ACTIVE_STATUSES, MissionSummary, listMissions } from "@/lib/api";
 import { Rolling } from "@/lib/alive";
 
 export function Rail() {
@@ -26,7 +26,10 @@ export function Rail() {
   const sources = missions.reduce((n, m) => n + m.sources, 0);
   const verified = missions.reduce((n, m) => n + m.verified, 0);
   const conflicted = missions.reduce((n, m) => n + m.conflicted, 0);
-  const open = missions.filter((m) => !m.has_recommendation).length;
+  // In flight means genuinely running. A mission that ended INCOMPLETE has no
+  // recommendation but is finished — counting it as working left dead missions
+  // "in flight" for days.
+  const open = missions.filter((m) => ACTIVE_STATUSES.has(m.status)).length;
 
   const vitals = [
     { label: "answers", value: missions.length },

@@ -11,6 +11,7 @@
 
 import { EventRecord, MissionDetail } from "@/lib/api";
 import { Rolling, cascade } from "@/lib/alive";
+import { Constellation } from "./Constellation";
 
 const DOMAIN_LABEL: Record<string, string> = {
   market: "market", talent: "talent", industry: "industry", strategic: "strategic",
@@ -46,25 +47,7 @@ export function ThinkingPanel({ mission, events, running }: {
         </span>
       </h2>
 
-      <ul className="tasks alive-cascade">
-        {mission.tasks.map((task, i) => {
-          const count = found.get(task.domain) ?? 0;
-          // "working" only where the mission is genuinely in flight and this
-          // domain has not reported yet — never a spinner over finished work.
-          const working = running && count === 0;
-          return (
-            <li className={`task${working ? " working" : ""}`} key={task.id} style={cascade(i)}>
-              <span className="domain">{DOMAIN_LABEL[task.domain] ?? task.domain}</span>
-              <span className="focus">{task.focus}</span>
-              <span className="found">
-                {working
-                  ? <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
-                  : count > 0 ? `${count} sources` : "—"}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <Constellation mission={mission} events={events} running={running} />
 
       <div className="thinking-tally">
         <span><Rolling value={discovered.length} /> sources read</span>
