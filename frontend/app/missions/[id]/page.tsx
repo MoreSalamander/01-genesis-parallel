@@ -7,6 +7,7 @@ import {
 } from "@/lib/api";
 import { MissionChip } from "../../components/Chips";
 import { ClaimCards } from "../../components/ClaimCards";
+import { ThinkingPanel } from "../../components/ThinkingPanel";
 import { Note, Rolling, Stream, VoiceLine, cascade, voiceFor } from "@/lib/alive";
 
 const STATUS_ORDER: Record<string, number> = { VERIFIED: 0, CONFLICTED: 1, UNVERIFIED: 2 };
@@ -108,6 +109,8 @@ export default function MissionPage() {
         <div className="tile"><div className="v"><Rolling value={mission.claims.filter((c) => c.status === "CONFLICTED").length} /></div><div className="l">Conflicts preserved</div></div>
         <div className="tile"><div className="v"><Rolling value={unverified} /></div><div className="l">Unverified</div></div>
       </div>
+
+      <ThinkingPanel mission={mission} events={events} running={running} />
 
       <section className="panel">
         <h2>Mission timeline {running && <span className="muted">· running…</span>}</h2>

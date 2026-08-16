@@ -255,3 +255,37 @@ td.num { font-variant-numeric: tabular-nums; }
 .starter:hover { color: var(--ink); border-color: var(--accent); }
 .starter:disabled { opacity: 0.45; cursor: not-allowed; }
 .ask-main > .panel:first-of-type { margin-top: 26px; }
+
+/* ── What I'm doing: parallel research made visible ──────────────────────── */
+.thinking.live { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.tasks { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.task {
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 9px; padding: 11px 13px;
+}
+.task.working { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.task-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.task .domain {
+  font: 700 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+}
+.task .found { font: 11px var(--mono); color: var(--muted); }
+.task .focus { font-size: 12.5px; line-height: 1.45; margin-top: 6px; color: var(--ink-2); }
+.task .queries { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.task .query {
+  font: 10px var(--mono); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.thinking-tally {
+  display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+  font-size: 13px; color: var(--ink-2);
+}
+.thinking-tally .still { color: var(--accent); font-family: var(--mono); font-size: 11.5px; }
+.found-feed { margin-top: 10px; display: grid; gap: 4px; }
+.found-row { display: flex; gap: 9px; align-items: baseline; font-size: 12.5px; }
+.found-row .tag {
+  font: 9.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); min-width: 62px;
+}
+.found-row .t { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
