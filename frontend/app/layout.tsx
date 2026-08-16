@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./alive.css";   // first: globals.css maps this console's palette onto it
 import "./globals.css";
 import Header from "./components/Header";
 

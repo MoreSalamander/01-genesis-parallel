@@ -12,6 +12,7 @@ from app.agents.research.planner import ResearchPlanner
 from app.agents.strategic.strategist import StrategicCognition
 from app.agents.verification.verifier import VerificationAgent
 from app.config import Settings, settings
+from app import runtime_proof
 from app.events.bus import EventBus
 from app.knowledge.datahub.emitter import DataHubEmitter
 from app.knowledge.store import LocalGraphStore
@@ -95,6 +96,8 @@ def run_mission(mission_id: str) -> None:
 def dispatch_mission(mission_id: str) -> str:
     """Start the durable MissionWorkflow; 'local' on surfaced fallback."""
     if settings.force_mock:
+        runtime_proof.record("temporal", "MOCK",
+                             "GENESIS_MOCK set — in-process execution by design")
         return "local"
     try:
         import asyncio
@@ -109,7 +112,11 @@ def dispatch_mission(mission_id: str) -> str:
             )
 
         asyncio.run(go())
+        runtime_proof.record("temporal", "LIVE",
+                             f"durable workflow accepted at {settings.temporal_address}")
         return "temporal"
     except Exception as err:
         print(f"[workflow] Temporal dispatch failed ({err}) — DEGRADED: in-process execution")
+        runtime_proof.record("temporal", "DEGRADED",
+                             f"dispatch failed ({err}) — ran in-process instead")
         return "local"

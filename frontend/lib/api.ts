@@ -1,3 +1,5 @@
+import type { RuntimeProof } from "@/lib/alive";
+
 export type VerifyState = "VERIFIED" | "UNVERIFIED" | "CONFLICTED";
 
 export interface MissionSummary {
@@ -34,6 +36,8 @@ export interface MissionDetail {
 export interface SystemStatus {
   system: string; banner: string; parallel_live: boolean; gemini_live: boolean;
   missions: number; episodic: number;
+  /** Substrate states for the runtime-proof footer (app/runtime_proof.py). */
+  runtime_proof?: RuntimeProof;
 }
 export interface EventRecord { event: string; at: string; mission_id?: string; [k: string]: unknown }
 
@@ -43,7 +47,21 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** One promoted entity in the durable world model. UNVERIFIED claims never
+ *  reach this store, so everything here is knowledge the studio stands behind. */
+export interface KnowledgeAssertion {
+  claim: string; status: VerifyState; disputed: boolean;
+  conflict_detail: string; corroborating_sources: number;
+  mission_id: string; claim_id: string; at: string;
+}
+export interface KnowledgeEntity {
+  name: string; type: string; first_seen: string; last_updated?: string;
+  assertions: KnowledgeAssertion[];
+}
+
 export const getStatus = () => api<SystemStatus>("/api/status");
+export const getKnowledgeEntities = () =>
+  api<Record<string, KnowledgeEntity>>("/api/knowledge/entities");
 export const listMissions = () => api<MissionSummary[]>("/api/missions");
 export const getMission = (id: string) => api<MissionDetail>(`/api/missions/${id}`);
 export const getEvents = (limit = 300) => api<EventRecord[]>(`/api/events?limit=${limit}`);

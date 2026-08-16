@@ -11,6 +11,7 @@ prerequisite for running the standalone demo.
 from __future__ import annotations
 
 from app.config import Settings
+from app import runtime_proof
 
 
 class DataHubEmitter:
@@ -22,9 +23,21 @@ class DataHubEmitter:
                 from datahub.emitter.rest_emitter import DatahubRestEmitter
 
                 self._emitter = DatahubRestEmitter(gms_server=settings.datahub_gms_url)
+                # A constructed client proves configuration, not reachability —
+                # so this stays IDLE until an emit actually lands.
+                runtime_proof.record(
+                    "datahub", "IDLE",
+                    f"client ready for {settings.datahub_gms_url}; nothing promoted yet")
             except ImportError:
                 print("[knowledge] DATAHUB_GMS_URL set but acryl-datahub not installed "
                       "(pip install 'genesis-parallel[datahub]') — using local graph store only")
+                runtime_proof.record(
+                    "datahub", "DEGRADED",
+                    "DATAHUB_GMS_URL is set but acryl-datahub is not installed")
+        else:
+            runtime_proof.record(
+                "datahub", "MOCK",
+                "no DATAHUB_GMS_URL — local graph store is the knowledge substrate")
 
     @property
     def available(self) -> bool:
@@ -59,7 +72,10 @@ class DataHubEmitter:
                 ),
             )
             self._emitter.emit(mcp)
+            runtime_proof.record("datahub", "LIVE",
+                                 f"knowledge entity emitted to {self.settings.datahub_gms_url}")
             return True
         except Exception as err:  # DataHub outage must not fail the mission (§12)
             print(f"[knowledge] DataHub emission failed for {name}: {err}")
+            runtime_proof.record("datahub", "DEGRADED", f"emission failed ({err})")
             return False

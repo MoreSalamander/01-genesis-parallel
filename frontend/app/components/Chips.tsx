@@ -1,3 +1,5 @@
+import { Elapsed } from "@/lib/alive";
+
 const VERIFY_CHIP: Record<string, { cls: string; icon: string }> = {
   VERIFIED: { cls: "verified", icon: "✓" },
   CONFLICTED: { cls: "conflicted", icon: "⚠" },
@@ -17,7 +19,14 @@ const MISSION_CHIP: Record<string, { cls: string; icon: string }> = {
   INCOMPLETE: { cls: "critical", icon: "!" },
 };
 
-export function MissionChip({ status }: { status: string }) {
+/** `running` adds the active-stage shimmer and an elapsed clock — passed only
+ *  when the mission is genuinely in flight (see ACTIVE_STATUSES). */
+export function MissionChip({ status, running = false }: { status: string; running?: boolean }) {
   const chip = MISSION_CHIP[status] ?? { cls: "unverified", icon: "…" };
-  return <span className={`chip ${chip.cls}`}>{chip.icon} {status.replaceAll("_", " ")}</span>;
+  return (
+    <span className={`chip ${chip.cls}${running ? " alive-active" : ""}`}>
+      {chip.icon} {status.replaceAll("_", " ")}
+      {running && <Elapsed stage={status} running={running} />}
+    </span>
+  );
 }

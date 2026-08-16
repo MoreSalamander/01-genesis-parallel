@@ -2,10 +2,12 @@
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ACTIVE_STATUSES, Claim, EventRecord, MissionDetail,
+  ACTIVE_STATUSES, EventRecord, MissionDetail,
   decideMission, getEvents, getMission,
 } from "@/lib/api";
-import { MissionChip, VerifyChip } from "../../components/Chips";
+import { MissionChip } from "../../components/Chips";
+import { ClaimCards } from "../../components/ClaimCards";
+import { Note, Rolling, cascade } from "@/lib/alive";
 
 const STATUS_ORDER: Record<string, number> = { VERIFIED: 0, CONFLICTED: 1, UNVERIFIED: 2 };
 
@@ -40,8 +42,6 @@ export default function MissionPage() {
 
   if (!mission) return <p className="muted">Loading mission…</p>;
 
-  const sourceById = new Map(mission.sources.map((s) => [s.id, s]));
-  const evidenceById = new Map(mission.evidence.map((e) => [e.id, e]));
   const unverified = mission.claims.filter((c) => c.status === "UNVERIFIED").length;
   const running = ACTIVE_STATUSES.has(mission.status);
   const rec = mission.recommendation;
@@ -68,24 +68,37 @@ export default function MissionPage() {
             <div style={{ fontSize: 18, fontWeight: 700 }}>{mission.objective}</div>
             <div className="muted" style={{ fontFamily: "var(--mono)", fontSize: 12 }}>{mission.id}</div>
           </div>
-          <MissionChip status={mission.status} />
+          <MissionChip status={mission.status} running={running} />
         </div>
-        {mission.error && <p className="chip critical">! {mission.error}</p>}
+        {mission.error && <Note tone="bad">{mission.error}</Note>}
       </section>
 
+      {running && (
+        <div className="ticker alive-active" role="status">
+          <span className="pill">RETRIEVING</span>
+          <span className="figure"><Rolling value={mission.sources.length} /> <span className="lbl">sources retrieved</span></span>
+          <span className="sep">·</span>
+          <span className="figure"><Rolling value={mission.evidence.length} /> <span className="lbl">evidence items</span></span>
+          <span className="sep">·</span>
+          <span className="figure"><Rolling value={mission.claims.length} /> <span className="lbl">claims extracted</span></span>
+          <span className="sep">·</span>
+          <span className="figure conflict"><Rolling value={mission.claims.filter((c) => c.status === "CONFLICTED").length} /> <span className="lbl">conflicts held</span></span>
+        </div>
+      )}
+
       <div className="tiles">
-        <div className="tile"><div className="v">{mission.sources.length}</div><div className="l">Sources</div></div>
-        <div className="tile"><div className="v">{mission.evidence.length}</div><div className="l">Evidence items</div></div>
-        <div className="tile"><div className="v">{mission.claims.filter((c) => c.status === "VERIFIED").length}</div><div className="l">Verified claims</div></div>
-        <div className="tile"><div className="v">{mission.claims.filter((c) => c.status === "CONFLICTED").length}</div><div className="l">Conflicts preserved</div></div>
-        <div className="tile"><div className="v">{unverified}</div><div className="l">Unverified</div></div>
+        <div className="tile"><div className="v"><Rolling value={mission.sources.length} /></div><div className="l">Sources</div></div>
+        <div className="tile"><div className="v"><Rolling value={mission.evidence.length} /></div><div className="l">Evidence items</div></div>
+        <div className="tile"><div className="v"><Rolling value={mission.claims.filter((c) => c.status === "VERIFIED").length} /></div><div className="l">Verified claims</div></div>
+        <div className="tile"><div className="v"><Rolling value={mission.claims.filter((c) => c.status === "CONFLICTED").length} /></div><div className="l">Conflicts preserved</div></div>
+        <div className="tile"><div className="v"><Rolling value={unverified} /></div><div className="l">Unverified</div></div>
       </div>
 
       <section className="panel">
         <h2>Mission timeline {running && <span className="muted">· running…</span>}</h2>
-        <ul className="timeline">
+        <ul className="timeline alive-cascade">
           {mission.stages.map((s, i) => (
-            <li key={i}>
+            <li key={i} style={cascade(i)}>
               <span className="t-name">{s.name}</span>{" "}
               <span className="t-at">{new Date(s.at).toLocaleTimeString()}</span>
               <div className="t-detail">{s.detail}</div>
@@ -135,10 +148,8 @@ export default function MissionPage() {
 
       {claims.length > 0 && (
         <section className="panel">
-          <h2>Claims &amp; evidence</h2>
-          {claims.map((c) => (
-            <ClaimCard key={c.id} claim={c} evidenceById={evidenceById} sourceById={sourceById} />
-          ))}
+          <h2>Claims &amp; evidence <span className="muted">· grouped by entity, conflicts first</span></h2>
+          <ClaimCards claims={claims} evidence={mission.evidence} sources={mission.sources} />
         </section>
       )}
 
@@ -152,38 +163,6 @@ export default function MissionPage() {
         </div>
       </section>
     </main>
-  );
-}
-
-function ClaimCard({ claim, evidenceById, sourceById }: {
-  claim: Claim;
-  evidenceById: Map<string, { claim_text: string; supporting_content: string; source_id: string }>;
-  sourceById: Map<string, { title: string; url: string }>;
-}) {
-  return (
-    <div className="claim">
-      <div className="head">
-        <VerifyChip status={claim.status} />
-        {claim.entity && <span className="entity">{claim.entity}</span>}
-        <span className="muted" style={{ fontSize: 12 }}>{claim.corroborating_sources} source{claim.corroborating_sources === 1 ? "" : "s"}</span>
-      </div>
-      <div className="text">{claim.text}</div>
-      {claim.conflict_detail && <div className="conflict">⚠ {claim.conflict_detail} — disagreement preserved, not resolved.</div>}
-      <details>
-        <summary>Evidence trail ({claim.evidence_ids.length})</summary>
-        {claim.evidence_ids.map((eid) => {
-          const ev = evidenceById.get(eid);
-          if (!ev) return null;
-          const src = sourceById.get(ev.source_id);
-          return (
-            <div key={eid} className="evidence">
-              <div>“{ev.supporting_content || ev.claim_text}”</div>
-              {src && <div className="src">— <a href={src.url} target="_blank" rel="noreferrer">{src.title}</a></div>}
-            </div>
-          );
-        })}
-      </details>
-    </div>
   );
 }
 

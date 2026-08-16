@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.governance.authority import AuthorityError, record_decision
 from app.models.evidence import Mission
 from app.workflows.run_mission import dispatch_mission, get_runtime, run_mission, start_mission
+from app import runtime_proof
 
 router = APIRouter(prefix="/api")
 
@@ -47,7 +48,28 @@ def status() -> dict:
         "gemini_live": runtime.settings.gemini_live,
         "missions": len(runtime.working.all()),
         "episodic": len(runtime.episodic.list()),
+        "runtime_proof": _runtime_proof(runtime.settings),
     }
+
+
+def _runtime_proof(settings) -> dict:
+    """Substrate states for the console's runtime-proof footer.
+
+    These are configuration-derived starting points; app.runtime_proof
+    overrides any of them the moment the substrate is actually exercised, so a
+    chip only reads LIVE on evidence.
+    """
+    return runtime_proof.snapshot({
+        "gemini": (("LIVE", f"credential present — narration via {settings.gemini_model}")
+                   if settings.gemini_live
+                   else ("MOCK", "no GOOGLE_API_KEY — deterministic mock narration")),
+        "parallel": (("LIVE", "PARALLEL_API_KEY present — live web retrieval")
+                     if settings.parallel_live
+                     else ("MOCK", "no PARALLEL_API_KEY — fixture sources")),
+        "temporal": ("IDLE", f"configured at {settings.temporal_address} — "
+                             "no workflow dispatched yet this session"),
+        "datahub": ("IDLE", f"configured at {settings.datahub_gms_url} — nothing promoted yet"),
+    })
 
 
 @router.post("/missions", status_code=202)

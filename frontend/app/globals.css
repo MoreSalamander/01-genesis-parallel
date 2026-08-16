@@ -15,6 +15,18 @@
   --warn: #fab219;
   --crit: #d03b3b;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* The alive layer maps onto this console's palette (see alive.css).
+     Signal desk: blue instrumentation on near-black. */
+  --alive-accent: var(--accent);
+  --alive-ink: var(--ink);
+  --alive-muted: var(--muted);
+  --alive-line: var(--line);
+  --alive-glow: rgba(57, 135, 229, 0.16);
+  --alive-veil: rgba(11, 14, 20, 0.86);
+  --alive-ok: var(--good);
+  --alive-warn: var(--warn);
+  --alive-bad: var(--crit);
 }
 
 * { box-sizing: border-box; }
@@ -38,7 +50,8 @@ a:hover { text-decoration: underline; }
 .masthead h1 { font-size: 17px; letter-spacing: 0.14em; margin: 0; font-weight: 700; }
 .masthead h1 a { color: var(--ink); }
 .masthead .sub { color: var(--muted); font-size: 13px; }
-.mode { font-family: var(--mono); font-size: 12px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+.mode { display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
 
 /* Panels & tiles */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
@@ -67,7 +80,65 @@ a:hover { text-decoration: underline; }
 .timeline .t-detail { color: var(--ink-2); font-size: 13px; }
 .timeline .t-at { color: var(--muted); font-size: 11px; font-family: var(--mono); }
 
+/* Live retrieval ticker — Parallel's breadth as it happens (item 6) */
+.ticker {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 10px; padding: 14px 18px; margin-bottom: 18px;
+}
+.ticker .pill {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 999px; padding: 3px 10px;
+}
+.ticker .figure { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ticker .figure.conflict { color: var(--warn); }
+.ticker .lbl {
+  font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); margin-left: 4px;
+}
+.ticker .sep { color: var(--line); }
+
 /* Claims / evidence */
+.claim-group { margin-bottom: 20px; }
+.claim-entity {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.06em; margin: 0 0 8px;
+  padding-bottom: 5px; border-bottom: 1px solid var(--line);
+}
+.claim-entity .claim-count {
+  font: 400 11px var(--mono); color: var(--muted); letter-spacing: 0;
+}
+.corrob {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.12em;
+}
+.corrob .corrob-n { font-size: 11px; color: var(--muted); letter-spacing: 0; }
+
+/* A conflict rendered as a split, never as a merge (item 7) */
+.conflicted-card { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+.conflict-split {
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 0;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line));
+  border-radius: 8px; margin-top: 8px; overflow: hidden;
+}
+@media (max-width: 760px) { .conflict-split { grid-template-columns: 1fr; } }
+.conflict-split .side { padding: 10px 13px; }
+.conflict-split .side-label {
+  font: 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--warn); margin-bottom: 4px;
+}
+.conflict-split .side .evidence { border-top: none; padding-top: 0; }
+.conflict-split .versus {
+  display: flex; align-items: center; justify-content: center; padding: 0 12px;
+  font: 700 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--warn);
+  border-left: 1px dashed color-mix(in srgb, var(--warn) 35%, var(--line));
+  border-right: 1px dashed color-mix(in srgb, var(--warn) 35%, var(--line));
+}
+.conflicted-card .preserved {
+  margin-top: 8px; font-size: 12.5px; color: var(--warn);
+}
+
 .claim { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: var(--surface-2); }
 .claim .head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .claim .entity { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
@@ -110,3 +181,9 @@ td.num { font-variant-numeric: tabular-nums; }
 .log div { padding: 2px 0; border-bottom: 1px dashed var(--line); }
 .log .e { color: var(--accent); }
 .muted { color: var(--muted); }
+
+/* World-model graph (item 8) */
+.graph-wrap {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px; margin-bottom: 10px; display: flex; justify-content: center;
+}

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getStatus, SystemStatus } from "@/lib/api";
+import { Pulse, RuntimeBar, proofItems } from "@/lib/alive";
 
 export default function Header() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -18,10 +19,17 @@ export default function Header() {
         <div className="sub">Convergence Studios · External Intelligence · Parallel track</div>
       </div>
       <div className="mode">
+        <Pulse signal={`${status?.missions ?? -1}|${status?.episodic ?? -1}`} />
         {status
           ? `Parallel ${status.parallel_live ? "LIVE" : "MOCK"} · Gemini ${status.gemini_live ? "LIVE" : "MOCK"}`
           : "backend offline — start uvicorn on :8000"}
       </div>
+      <RuntimeBar items={proofItems(status?.runtime_proof, [
+        ["gemini", "Gemini"],
+        ["parallel", "Parallel"],
+        ["temporal", "Temporal"],
+        ["datahub", "DataHub"],
+      ])} />
     </header>
   );
 }

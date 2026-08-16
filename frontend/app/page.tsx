@@ -2,8 +2,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { listMissions, startMission, MissionSummary } from "@/lib/api";
+import { ACTIVE_STATUSES, listMissions, startMission, MissionSummary } from "@/lib/api";
 import { MissionChip } from "./components/Chips";
+import { KnowledgeGraph } from "./components/KnowledgeGraph";
+import { EmptyState, Rolling, cascade } from "@/lib/alive";
 
 const DEMO_OBJECTIVE = "Find emerging production companies worth monitoring";
 
@@ -41,11 +43,28 @@ export default function Board() {
   return (
     <main>
       <div className="tiles">
-        <div className="tile"><div className="v">{signals}</div><div className="l">External signals</div></div>
-        <div className="tile"><div className="v">{missions.length}</div><div className="l">Missions</div></div>
-        <div className="tile"><div className="v">{verified}</div><div className="l">Verified claims</div></div>
-        <div className="tile"><div className="v">{conflicted}</div><div className="l">Conflicts preserved</div></div>
+        <div className="tile"><div className="v"><Rolling value={signals} /></div><div className="l">External signals</div></div>
+        <div className="tile"><div className="v"><Rolling value={missions.length} /></div><div className="l">Missions</div></div>
+        <div className="tile"><div className="v"><Rolling value={verified} /></div><div className="l">Verified claims</div></div>
+        <div className="tile"><div className="v"><Rolling value={conflicted} /></div><div className="l">Conflicts preserved</div></div>
       </div>
+
+      {missions.length === 0 && (
+        <EmptyState
+          eyebrow="Signal Intelligence · Parallel track"
+          title="External intelligence the studio can actually audit."
+          lead="Give it an objective and the Executive plans research across Market, Talent, Industry
+                and Strategic cognition, retrieves the evidence through Parallel Search, and verifies
+                every claim against its sources. Where sources disagree the conflict is preserved and
+                shown as CONFLICTED — never quietly resolved — and the recommendation comes back to you
+                for authorization."
+          action={
+            <button className="btn approve" onClick={launch} disabled={busy}>
+              {busy ? "Launching…" : `Start here — launch “${DEMO_OBJECTIVE}”`}
+            </button>
+          }
+        />
+      )}
 
       <section className="panel">
         <h2>New intelligence mission</h2>
@@ -79,11 +98,11 @@ export default function Board() {
             <thead>
               <tr><th>Objective</th><th>Status</th><th>Sources</th><th>Verified</th><th>Conflicted</th></tr>
             </thead>
-            <tbody>
-              {missions.map((m) => (
-                <tr key={m.id}>
+            <tbody className="alive-cascade">
+              {missions.map((m, i) => (
+                <tr key={m.id} style={cascade(i)}>
                   <td><Link href={`/missions/${m.id}`}>{m.objective}</Link></td>
-                  <td><MissionChip status={m.status} /></td>
+                  <td><MissionChip status={m.status} running={ACTIVE_STATUSES.has(m.status)} /></td>
                   <td className="num">{m.sources}</td>
                   <td className="num">{m.verified}</td>
                   <td className="num">{m.conflicted}</td>
@@ -93,6 +112,8 @@ export default function Board() {
           </table>
         )}
       </section>
+
+      <KnowledgeGraph />
     </main>
   );
 }
