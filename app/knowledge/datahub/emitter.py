@@ -25,7 +25,7 @@ class DataHubEmitter:
                 self._emitter = DatahubRestEmitter(gms_server=settings.datahub_gms_url)
                 # A constructed client proves configuration, not reachability —
                 # so this stays IDLE until an emit actually lands.
-                runtime_proof.record(
+                runtime_proof.declare(
                     "datahub", "IDLE",
                     f"configured at {settings.datahub_gms_url} — not contacted yet")
             except ImportError:
@@ -35,7 +35,7 @@ class DataHubEmitter:
                     "datahub", "DEGRADED",
                     "DATAHUB_GMS_URL is set but acryl-datahub is not installed")
         else:
-            runtime_proof.record(
+            runtime_proof.declare(
                 "datahub", "MOCK",
                 "no DATAHUB_GMS_URL — local graph store is the knowledge substrate")
 
