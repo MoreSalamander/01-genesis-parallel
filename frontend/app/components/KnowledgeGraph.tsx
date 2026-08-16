@@ -163,7 +163,7 @@ export function KnowledgeGraph() {
 
   return (
     <section className="panel">
-      <h2>World model <span className="muted">· {names.length} entities carried across missions</span></h2>
+      <h2>What the studio has learned <span className="muted">· {names.length} companies and people it now tracks across every question you have asked</span></h2>
       <div className="graph-wrap">
         <canvas
           ref={canvasRef}

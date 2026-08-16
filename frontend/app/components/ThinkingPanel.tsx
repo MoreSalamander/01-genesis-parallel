@@ -42,40 +42,33 @@ export function ThinkingPanel({ mission, events, running }: {
       <h2>
         {running ? "What I'm doing" : "How I answered this"}
         <span className="muted">
-          {" · "}{mission.tasks.length} research tasks across {new Set(mission.tasks.map((t) => t.domain)).size} domains
+          {" · "}I split the question into {mission.tasks.length} lines of enquiry and chased them at once
         </span>
       </h2>
 
-      <div className="tasks alive-cascade">
+      <ul className="tasks alive-cascade">
         {mission.tasks.map((task, i) => {
           const count = found.get(task.domain) ?? 0;
           // "working" only where the mission is genuinely in flight and this
           // domain has not reported yet — never a spinner over finished work.
           const working = running && count === 0;
           return (
-            <div className={`task${working ? " working" : ""}`} key={task.id} style={cascade(i)}>
-              <div className="task-head">
-                <span className="domain">{DOMAIN_LABEL[task.domain] ?? task.domain}</span>
+            <li className={`task${working ? " working" : ""}`} key={task.id} style={cascade(i)}>
+              <span className="domain">{DOMAIN_LABEL[task.domain] ?? task.domain}</span>
+              <span className="focus">{task.focus}</span>
+              <span className="found">
                 {working
                   ? <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
-                  : <span className="found">{count > 0 ? `${count} sources` : "—"}</span>}
-              </div>
-              <div className="focus">{task.focus}</div>
-              {task.queries.length > 0 && (
-                <div className="queries">
-                  {task.queries.slice(0, 3).map((q) => (
-                    <span className="query" key={q}>{q}</span>
-                  ))}
-                </div>
-              )}
-            </div>
+                  : count > 0 ? `${count} sources` : "—"}
+              </span>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
       <div className="thinking-tally">
         <span><Rolling value={discovered.length} /> sources read</span>
-        <span><Rolling value={claimsMade} /> claims checked</span>
+        <span><Rolling value={claimsMade} /> statements checked against each other</span>
         {running && <span className="still">still reading…</span>}
       </div>
 

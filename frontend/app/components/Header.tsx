@@ -16,7 +16,10 @@ export default function Header() {
     <header className="masthead">
       <div>
         <h1><Link href="/">GENESIS OS — SIGNAL INTELLIGENCE</Link></h1>
-        <div className="sub">Convergence Studios · External Intelligence · Parallel track</div>
+        <div className="sub">
+          Research for Convergence Studios — every answer traceable to its sources
+          <span className="track" title="Built on Parallel web retrieval and Google Gemini">Parallel track</span>
+        </div>
       </div>
       <div className="mode">
         <Pulse signal={`${status?.missions ?? -1}|${status?.episodic ?? -1}`} />

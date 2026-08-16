@@ -16,14 +16,18 @@ const METER_MAX = 4;
 function Corroboration({ sources }: { sources: number }) {
   const filled = Math.min(sources, METER_MAX);
   return (
-    <span className="corrob" title={`${sources} corroborating source${sources === 1 ? "" : "s"}`}>
+    <span className="corrob" title={sources === 1
+        ? "Only one source — unconfirmed"
+        : `${sources} independent sources agreed, which is why this counts as confirmed`}>
       <span aria-hidden="true">
         {"●".repeat(filled)}
         {"○".repeat(Math.max(0, METER_MAX - filled))}
         {sources > METER_MAX ? "+" : ""}
       </span>
       <span className="corrob-n">
-        {sources} source{sources === 1 ? "" : "s"}
+        {sources === 1
+          ? "1 source said this"
+          : `${sources} independent sources said this`}
       </span>
     </span>
   );

@@ -7,6 +7,7 @@ import {
   getStatus, listMissions, startMission,
 } from "@/lib/api";
 import { MissionChip } from "./components/Chips";
+import { HowThisWorks } from "./components/HowThisWorks";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
 import { Note, Rolling, VoiceLine, cascade, proofState, useCursorGlow } from "@/lib/alive";
 
@@ -80,6 +81,8 @@ export default function Board() {
 
   return (
     <main className="ask-main">
+      <HowThisWorks />
+
       <section className="ask">
         <VoiceLine
           className="alive-voice-hero"

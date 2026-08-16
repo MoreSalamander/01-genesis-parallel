@@ -76,85 +76,88 @@ export default function MissionPage() {
 
   return (
     <main>
-      <section className="panel">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <h2>Intelligence mission</h2>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{mission.objective}</div>
-            <div className="muted" style={{ fontFamily: "var(--mono)", fontSize: 12 }}>{mission.id}</div>
-          </div>
+      <header className="answer-head">
+        <div className="asked">you asked</div>
+        <h1 className="question">{mission.objective}</h1>
+        <div className="row" style={{ gap: 12 }}>
           <MissionChip status={mission.status} running={running} />
+          <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{mission.id}</span>
         </div>
         <VoiceLine line={voiceFor(VOICE, mission.status)} thinking={running} />
         {mission.error && <Note tone="bad">{mission.error}</Note>}
-      </section>
-
-      {running && (
-        <div className="ticker alive-active" role="status">
-          <span className="pill">RETRIEVING</span>
-          <span className="figure"><Rolling value={mission.sources.length} /> <span className="lbl">sources retrieved</span></span>
-          <span className="sep">·</span>
-          <span className="figure"><Rolling value={mission.evidence.length} /> <span className="lbl">evidence items</span></span>
-          <span className="sep">·</span>
-          <span className="figure"><Rolling value={mission.claims.length} /> <span className="lbl">claims extracted</span></span>
-          <span className="sep">·</span>
-          <span className="figure conflict"><Rolling value={mission.claims.filter((c) => c.status === "CONFLICTED").length} /> <span className="lbl">conflicts held</span></span>
-        </div>
-      )}
-
-      <div className="tiles">
-        <div className="tile"><div className="v"><Rolling value={mission.sources.length} /></div><div className="l">Sources</div></div>
-        <div className="tile"><div className="v"><Rolling value={mission.evidence.length} /></div><div className="l">Evidence items</div></div>
-        <div className="tile"><div className="v"><Rolling value={mission.claims.filter((c) => c.status === "VERIFIED").length} /></div><div className="l">Verified claims</div></div>
-        <div className="tile"><div className="v"><Rolling value={mission.claims.filter((c) => c.status === "CONFLICTED").length} /></div><div className="l">Conflicts preserved</div></div>
-        <div className="tile"><div className="v"><Rolling value={unverified} /></div><div className="l">Unverified</div></div>
-      </div>
-
-      <ThinkingPanel mission={mission} events={events} running={running} />
-
-      <section className="panel">
-        <h2>Mission timeline {running && <span className="muted">· running…</span>}</h2>
-        <ul className="timeline alive-cascade">
-          {mission.stages.map((s, i) => (
-            <li key={i} style={cascade(i)}>
-              <span className="t-name">{s.name}</span>{" "}
-              <span className="t-at">{new Date(s.at).toLocaleTimeString()}</span>
-              <div className="t-detail">{s.detail}</div>
-            </li>
-          ))}
-        </ul>
-      </section>
+      </header>
 
       {rec && (
-        <section className="panel rec">
-          <h2>Recommendation — Studio Head authorization required</h2>
+        <section className="answer">
+          <div className="answer-label">the answer</div>
           {/* Gemini's words, revealed as they would be written. An answer that
               composes itself reads as cognition; a paragraph that appears reads
               as a database. Click to skip — never make anyone wait to read. */}
           <p className="action"><Stream text={rec.action} /></p>
           <p className="rationale"><Stream text={rec.rationale} /></p>
-          <div className="meter" role="img" aria-label={`Confidence ${Math.round(rec.confidence * 100)} percent`}>
-            <div style={{ width: `${Math.round(rec.confidence * 100)}%` }} />
+          {/* Written for someone reading this for the first time. Every term
+              that could be jargon is explained in the same breath, because a
+              Studio Head should not need the glossary to judge the answer. */}
+          <div className="grounding">
+            <p>
+              I read <b>{mission.sources.length}</b> sources and pulled{" "}
+              <b>{mission.claims.length}</b> separate factual statements out of them.
+            </p>
+            <ul>
+              <li>
+                <b>{mission.claims.filter((c) => c.status === "VERIFIED").length} confirmed</b> — more
+                than one independent source said the same thing, so I treat these as solid.
+              </li>
+              <li>
+                <b>{mission.claims.filter((c) => c.status === "CONFLICTED").length} disputed</b> — sources
+                contradicted each other. I've kept both versions below instead of picking a winner,
+                because guessing here is how bad decisions get made.
+              </li>
+              <li>
+                <b>{unverified} single-source</b> — only one source said it. Useful leads, but I
+                haven't been able to confirm them. Don't bet the slate on these.
+              </li>
+            </ul>
+            <p className="conf">
+              My confidence in the recommendation above is <b>{Math.round(rec.confidence * 100)}%</b> —
+              that's how much of it rests on the confirmed material rather than the unconfirmed.
+            </p>
           </div>
-          <div className="meter-label">{Math.round(rec.confidence * 100)}% confidence · grounded in {mission.claims.length} claim groups from {mission.sources.length} sources</div>
           {actionNote && <p className="muted">{actionNote}</p>}
+          {!rec.decision && (
+            <p className="decide-help">
+              Nothing is saved until you decide. Accepting adds the confirmed facts to the studio's
+              permanent knowledge; the disputed ones stay marked as disputed.
+            </p>
+          )}
           <div className="row" style={{ marginTop: 14 }}>
             {rec.decision ? (
               <span className="chip accent">Decision recorded: {rec.decision.toUpperCase()} {rec.decided_at ? `· ${new Date(rec.decided_at).toLocaleTimeString()}` : ""}</span>
             ) : (
               <>
-                <button className="btn approve" disabled={deciding} onClick={() => decide("approved")}>✓ Approve</button>
-                <button className="btn reject" disabled={deciding} onClick={() => decide("rejected")}>✕ Reject</button>
-                <button className="btn" disabled={deciding} onClick={() => decide("more_research")}>↻ Request more research</button>
+                <button className="btn approve" disabled={deciding} onClick={() => decide("approved")}
+                        title="Accept this answer. The confirmed facts are saved into what the studio knows, so future questions build on them.">
+                  ✓ Accept this
+                </button>
+                <button className="btn reject" disabled={deciding} onClick={() => decide("rejected")}
+                        title="Discard this answer. Nothing is saved to the studio's knowledge.">
+                  ✕ Discard
+                </button>
+                <button className="btn" disabled={deciding} onClick={() => decide("more_research")}
+                        title="Send it back to look harder — more sources, and another pass at the unconfirmed claims.">
+                  ↻ Look deeper
+                </button>
               </>
             )}
           </div>
         </section>
       )}
 
+      <ThinkingPanel mission={mission} events={events} running={running} />
+
       {mission.findings.length > 0 && (
         <section className="panel">
-          <h2>Strategic findings</h2>
+          <h2>What stood out <span className="muted">· the parts most likely to change a decision</span></h2>
           {mission.findings.map((f) => (
             <div key={f.id} className="claim">
               <div className="head">
@@ -169,13 +172,26 @@ export default function MissionPage() {
 
       {claims.length > 0 && (
         <section className="panel">
-          <h2>Claims &amp; evidence <span className="muted">· grouped by entity, conflicts first</span></h2>
+          <h2>Everything I found <span className="muted">· grouped by who or what it\u2019s about, disagreements first so you see them</span></h2>
           <ClaimCards claims={claims} evidence={mission.evidence} sources={mission.sources} />
         </section>
       )}
 
       <section className="panel">
-        <h2>Agent event log</h2>
+        <h2>Step by step <span className="muted">· every stage, timestamped, so you can audit the route</span></h2>
+        <ul className="timeline alive-cascade">
+          {mission.stages.map((s, i) => (
+            <li key={i} style={cascade(i)}>
+              <span className="t-name">{s.name}</span>{" "}
+              <span className="t-at">{new Date(s.at).toLocaleTimeString()}</span>
+              <div className="t-detail">{s.detail}</div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="panel">
+        <h2>Raw agent log <span className="muted">· the unedited machine record, for when you want to check my work</span></h2>
         <div className="log">
           {events.slice(-40).reverse().map((e, i) => (
             <div key={i}><span className="e">{e.event}</span> {summarize(e)}</div>

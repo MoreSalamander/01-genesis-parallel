@@ -1,14 +1,26 @@
 import { Elapsed } from "@/lib/alive";
 
-const VERIFY_CHIP: Record<string, { cls: string; icon: string }> = {
-  VERIFIED: { cls: "verified", icon: "✓" },
-  CONFLICTED: { cls: "conflicted", icon: "⚠" },
-  UNVERIFIED: { cls: "unverified", icon: "○" },
+// The state a reader needs, in the words they would use. The machine states
+// (VERIFIED / CONFLICTED / UNVERIFIED) stay in the API and the event log where
+// they belong; a Studio Head should not have to learn an enum to read a claim.
+const VERIFY_CHIP: Record<string, { cls: string; icon: string; label: string; why: string }> = {
+  VERIFIED: {
+    cls: "verified", icon: "✓", label: "Confirmed",
+    why: "More than one independent source said this, so it is treated as solid.",
+  },
+  CONFLICTED: {
+    cls: "conflicted", icon: "⚠", label: "Sources disagree",
+    why: "Sources contradicted each other. Both versions are kept — no winner was picked.",
+  },
+  UNVERIFIED: {
+    cls: "unverified", icon: "○", label: "Single source",
+    why: "Only one source said this. Useful as a lead, but unconfirmed.",
+  },
 };
 
 export function VerifyChip({ status }: { status: string }) {
   const chip = VERIFY_CHIP[status] ?? VERIFY_CHIP.UNVERIFIED;
-  return <span className={`chip ${chip.cls}`}>{chip.icon} {status}</span>;
+  return <span className={`chip ${chip.cls}`} title={chip.why}>{chip.icon} {chip.label}</span>;
 }
 
 const MISSION_CHIP: Record<string, { cls: string; icon: string }> = {

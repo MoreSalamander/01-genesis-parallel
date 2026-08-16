@@ -258,24 +258,17 @@ td.num { font-variant-numeric: tabular-nums; }
 
 /* ── What I'm doing: parallel research made visible ──────────────────────── */
 .thinking.live { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.tasks { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
-.task {
-  background: var(--surface-2); border: 1px solid var(--line);
-  border-radius: 9px; padding: 11px 13px;
-}
+
+
 .task.working { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-.task-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
 .task .domain {
   font: 700 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
 }
 .task .found { font: 11px var(--mono); color: var(--muted); }
 .task .focus { font-size: 12.5px; line-height: 1.45; margin-top: 6px; color: var(--ink-2); }
-.task .queries { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-.task .query {
-  font: 10px var(--mono); color: var(--muted);
-  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px;
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+
+
 .thinking-tally {
   display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
   margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
@@ -289,3 +282,99 @@ td.num { font-variant-numeric: tabular-nums; }
   color: var(--muted); min-width: 62px;
 }
 .found-row .t { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── The answer document ─────────────────────────────────────────────────
+   Not a dashboard. The question, then the answer, then what it rests on —
+   read top to bottom. No tiles: a count belongs in a sentence where it can
+   be qualified, not in a box where it looks like a score. */
+.answer-head { padding: 26px 0 6px; }
+.answer-head .asked {
+  font: 10px var(--mono); letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted);
+}
+.answer-head .question {
+  font-size: 27px; line-height: 1.28; font-weight: 700; margin: 8px 0 12px; max-width: 30ch;
+}
+@media (max-width: 700px) { .answer-head .question { font-size: 22px; } }
+
+.answer {
+  border-left: 2px solid var(--accent);
+  padding: 4px 0 4px 20px;
+  margin: 26px 0;
+}
+.answer-label {
+  font: 10px var(--mono); letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent);
+  margin-bottom: 8px;
+}
+.answer .action { font-size: 20px; line-height: 1.4; font-weight: 700; margin: 0 0 10px; }
+.answer .rationale { font-size: 15px; line-height: 1.65; color: var(--ink-2); margin: 0; }
+.answer .grounding {
+  font-size: 13px; line-height: 1.7; color: var(--muted); margin: 14px 0 0;
+  padding-top: 12px; border-top: 1px solid var(--line);
+}
+.answer .grounding b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Research as a list of lines, not a grid of cards. */
+.tasks { list-style: none; margin: 0; padding: 0; }
+.task {
+  display: grid; grid-template-columns: 84px 1fr auto; gap: 14px; align-items: baseline;
+  padding: 9px 0; border-bottom: 1px dashed var(--line);
+}
+@media (max-width: 640px) { .task { grid-template-columns: 74px 1fr; } .task .found { display: none; } }
+.task .focus { font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.task.working .focus { color: var(--ink); }
+.task .found { font: 11px var(--mono); color: var(--muted); white-space: nowrap; }
+
+/* Plain-language evidence summary — explanation, not a scoreboard. */
+.answer .grounding {
+  font-size: 13.5px; line-height: 1.7; color: var(--ink-2);
+  margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
+}
+.answer .grounding p { margin: 0 0 8px; }
+.answer .grounding ul { margin: 0 0 8px; padding-left: 0; list-style: none; }
+.answer .grounding li {
+  position: relative; padding-left: 16px; margin-bottom: 6px; color: var(--muted);
+}
+.answer .grounding li::before {
+  content: ""; position: absolute; left: 0; top: 0.62em;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--line);
+}
+.answer .grounding li b { color: var(--ink); }
+.answer .grounding .conf { color: var(--muted); margin-top: 10px; }
+.decide-help {
+  font-size: 12.5px; line-height: 1.6; color: var(--muted);
+  margin: 14px 0 0; max-width: 68ch;
+}
+
+/* First-run explainer — read once, dismissed forever. */
+.how {
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 12px; padding: 20px 22px; margin: 24px 0 6px;
+}
+.how-top { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.how-top h2 {
+  font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent);
+  margin: 0; font-weight: 700;
+}
+.how-x {
+  font: inherit; font-size: 12px; color: var(--muted); cursor: pointer;
+  background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 4px 13px;
+}
+.how-x:hover { color: var(--ink); border-color: var(--accent); }
+.how-lead { font-size: 15px; line-height: 1.65; margin: 12px 0 14px; max-width: 74ch; }
+.how-steps { margin: 0; padding-left: 20px; max-width: 76ch; }
+.how-steps li { font-size: 13.5px; line-height: 1.65; color: var(--ink-2); margin-bottom: 7px; }
+.how-steps li b { color: var(--ink); }
+.how-thesis {
+  font-size: 13.5px; line-height: 1.7; color: var(--ink-2); max-width: 76ch;
+  margin: 14px 0 0; padding-top: 13px; border-top: 1px solid var(--line);
+}
+.how-thesis b { color: var(--warn); }
+
+/* Track label — present for reviewers, quiet enough that a buyer skips it. */
+.masthead .sub .track {
+  display: inline-block; margin-left: 10px; padding: 1px 8px;
+  font: 9.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); opacity: 0.55;
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.masthead .sub .track:hover { opacity: 1; }
