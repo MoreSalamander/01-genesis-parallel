@@ -18,6 +18,7 @@ import { useReducedMotion } from "@/lib/alive";
 interface Node {
   id: string; x: number; y: number; vx: number; vy: number;
   r: number; disputed: boolean; claims: number;
+  bx?: number; by?: number; phase?: number;   // settled position + drift offset
 }
 
 const W = 720;
@@ -94,6 +95,10 @@ export function KnowledgeGraph() {
   const nodesRef = useRef<Node[]>([]);
   const [entities, setEntities] = useState<Record<string, KnowledgeEntity>>({});
   const [selected, setSelected] = useState<string | null>(null);
+  // Hover lives in a ref: putting it in the dependency list would re-run the
+  // effect and re-settle the whole layout on every mouse move.
+  const hoveredRef = useRef<string | null>(null);
+  const [hoverName, setHoverName] = useState<string | null>(null);
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -120,16 +125,31 @@ export function KnowledgeGraph() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const draw = () => {
+      // Recomputed each frame so hover responds without restarting the layout.
+      const focus = hoveredRef.current ?? selected;
+      const near = new Set<string>();
+      if (focus) {
+        for (const [i, j] of edges) {
+          if (nodes[i].id === focus) near.add(nodes[j].id);
+          if (nodes[j].id === focus) near.add(nodes[i].id);
+        }
+      }
       ctx.clearRect(0, 0, W, H);
-      ctx.strokeStyle = line; ctx.lineWidth = 1;
       for (const [i, j] of edges) {
+        const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
+        ctx.strokeStyle = lit ? accent : line;
+        ctx.lineWidth = lit ? 1.6 : 1;
+        ctx.globalAlpha = focus === null ? 1 : lit ? 0.9 : 0.25;
         ctx.beginPath();
         ctx.moveTo(nodes[i].x, nodes[i].y);
         ctx.lineTo(nodes[j].x, nodes[j].y);
         ctx.stroke();
       }
+      ctx.globalAlpha = 1;
       for (const n of nodes) {
-        const on = n.id === selected;
+        const on = n.id === selected || n.id === focus;
+        const related = focus !== null && (n.id === focus || near.has(n.id));
+        ctx.globalAlpha = focus === null || related ? 1 : 0.3;
         const colour = n.disputed ? warn : accent;
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
@@ -146,33 +166,59 @@ export function KnowledgeGraph() {
         ctx.textAlign = "center";
         ctx.fillText(n.id.length > 22 ? `${n.id.slice(0, 21)}…` : n.id, n.x, n.y + n.r + 13);
       }
+      ctx.globalAlpha = 1;
     };
 
-    if (reduced) { settle(nodes, edges, TICKS); draw(); return; }
-    let frame = 0, raf = 0;
-    const tick = () => {
-      settle(nodes, edges, 2); draw(); frame += 2;
-      if (frame < TICKS) raf = requestAnimationFrame(tick);
+    // Settle the layout once, then keep it gently in motion. Re-running the
+    // O(n²) repulsion every frame would be 11k pair calculations at this size;
+    // drifting each node around its settled position costs nothing and means
+    // the graph is never frozen. The drift is ambient — it claims nothing.
+    settle(nodes, edges, TICKS);
+    for (const n of nodes) { n.bx = n.x; n.by = n.y; n.phase = Math.random() * Math.PI * 2; }
+    draw();
+    if (reduced) return;
+
+    let raf = 0;
+    const start = performance.now();
+    const drift = (now: number) => {
+      const t = (now - start) / 1000;
+      for (const n of nodes) {
+        n.x = n.bx! + Math.sin(t * 0.42 + n.phase!) * 4.5;
+        n.y = n.by! + Math.cos(t * 0.33 + n.phase!) * 3.5;
+      }
+      draw();
+      raf = requestAnimationFrame(drift);
     };
-    raf = requestAnimationFrame(tick);
+    raf = requestAnimationFrame(drift);
     return () => cancelAnimationFrame(raf);
   }, [entities, names.length, reduced, selected]);
 
   // Map a click in CSS pixels onto the canvas's logical coordinate space, since
   // the canvas is laid out responsively rather than at its intrinsic size.
-  const pick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const nodeAt = (clientX: number, clientY: number): string | null => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const box = canvas.getBoundingClientRect();
-    const x = ((event.clientX - box.left) / box.width) * W;
-    const y = ((event.clientY - box.top) / box.height) * H;
+    const x = ((clientX - box.left) / box.width) * W;
+    const y = ((clientY - box.top) / box.height) * H;
     let hit: string | null = null;
     let best = Infinity;
     for (const n of nodesRef.current) {
       const d = Math.hypot(n.x - x, n.y - y);
       if (d <= n.r + 10 && d < best) { best = d; hit = n.id; }
     }
+    return hit;
+  };
+
+  const pick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const hit = nodeAt(event.clientX, event.clientY);
     setSelected(hit === selected ? null : hit);
+  };
+
+  const track = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const hit = nodeAt(event.clientX, event.clientY);
+    hoveredRef.current = hit;              // the draw loop reads this next frame
+    setHoverName(hit);                     // only to drive the cursor
   };
 
   if (names.length === 0) return null;
@@ -194,7 +240,12 @@ export function KnowledgeGraph() {
           <canvas
             ref={canvasRef}
             onClick={pick}
-            style={{ width: "100%", maxWidth: W, height: "auto", aspectRatio: `${W} / ${H}`, cursor: "pointer" }}
+            onMouseMove={track}
+            onMouseLeave={() => { hoveredRef.current = null; setHoverName(null); }}
+            style={{
+              width: "100%", maxWidth: W, height: "auto", aspectRatio: `${W} / ${H}`,
+              cursor: hoverName ? "pointer" : "default",
+            }}
             role="img"
             aria-label={`${names.length} entities. Use the list below to inspect each one.`}
           />

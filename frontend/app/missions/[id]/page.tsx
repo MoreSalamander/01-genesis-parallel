@@ -179,7 +179,7 @@ export default function MissionPage() {
 
       {claims.length > 0 && (
         <section className="panel">
-          <h2>Everything I found <span className="muted">· grouped by who or what it\u2019s about, disagreements first so you see them</span></h2>
+          <h2>Everything I found <span className="muted">· grouped by who or what it’s about, disagreements first so you see them</span></h2>
           <ClaimCards claims={claims} evidence={mission.evidence} sources={mission.sources} />
         </section>
       )}
