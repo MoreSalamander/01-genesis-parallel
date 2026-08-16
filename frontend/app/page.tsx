@@ -3,22 +3,27 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  ACTIVE_STATUSES, MissionSummary, SystemStatus,
-  getStatus, listMissions, startMission,
+  ACTIVE_STATUSES, EventRecord, MissionSummary, SystemStatus,
+  getEvents, getStatus, listMissions, startMission,
 } from "@/lib/api";
-import { MissionChip } from "./components/Chips";
 import { HowThisWorks } from "./components/HowThisWorks";
 import { ContextGraph } from "./components/ContextGraph";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
-import { Note, Rolling, VoiceLine, cascade, proofState, useCursorGlow } from "@/lib/alive";
+import { Feed, Panel, Readout, Ring, RingLegend } from "./components/Hud";
+import { Note, VoiceLine, cascade, proofState, useCursorGlow } from "@/lib/alive";
 
-/* The ask surface. Signal Intelligence is the studio's researcher, so the
-   console leads with the question rather than with a form: you ask, it reads
-   the external record through Parallel, and every answer arrives with the
-   sources it stands on and the disagreements it refused to resolve. */
+/* The board.
 
-/* Open questions — only offered when Parallel retrieval is actually live,
-   because only then can they be answered from the real external record. */
+   Signal Intelligence is the studio's researcher, so the console still leads
+   with the question — you ask, it reads the external record, and every answer
+   arrives with the sources it stands on and the disagreements it kept.
+
+   Around that sits the instrumentation, and the instruments are chosen for
+   what a Studio Head actually needs to trust a researcher: how much has it
+   read, how much of what it found held up, what did it refuse to resolve, and
+   what is it doing right now. Each one is bound to a number the backend
+   produced. None of them move unless the number moved. */
+
 const LIVE_STARTERS = [
   "What does it actually cost to produce a short film in 2026?",
   "Which festivals matter most for a first feature?",
@@ -45,15 +50,17 @@ const OUTCOME: Record<string, { word: string; cls: string }> = {
   REJECTED: { word: "You discarded this", cls: "off" },
   MORE_RESEARCH_REQUESTED: { word: "Sent back for more", cls: "busy" },
   RECOMMENDED: { word: "Waiting on your decision", cls: "wait" },
-  INCOMPLETE: { word: "Couldn\u2019t finish honestly", cls: "off" },
+  INCOMPLETE: { word: "Couldn’t finish honestly", cls: "off" },
 };
 
 export default function Board() {
   const router = useRouter();
   const [missions, setMissions] = useState<MissionSummary[]>([]);
   const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [events, setEvents] = useState<EventRecord[]>([]);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState("");
   useCursorGlow();
 
@@ -61,6 +68,7 @@ export default function Board() {
     const load = () => {
       listMissions().then(setMissions).catch(() => {});
       getStatus().then(setStatus).catch(() => setStatus(null));
+      getEvents(60).then(setEvents).catch(() => {});
     };
     load();
     const timer = setInterval(load, 2000);
@@ -73,26 +81,38 @@ export default function Board() {
   const liveRetrieval = retrieval === "LIVE";
   const starters = liveRetrieval ? LIVE_STARTERS : FIXTURE_STARTERS;
 
+  // Totals across every question ever asked. These are sums of recorded
+  // per-mission counts — nothing is estimated.
+  const sources = missions.reduce((n, m) => n + m.sources, 0);
+  const claims = missions.reduce((n, m) => n + m.claims, 0);
+  const verified = missions.reduce((n, m) => n + m.verified, 0);
+  const conflicted = missions.reduce((n, m) => n + m.conflicted, 0);
+  const answered = missions.filter((m) => m.has_recommendation).length;
+  const running = missions.some((m) => ACTIVE_STATUSES.has(m.status));
+
   const ask = async (text: string) => {
     const objective = text.trim();
     if (objective.length < 8 || busy) return;
     setBusy(true);
     setError("");
+    // The board pulls back while the question is being opened. This overlaps
+    // the request rather than delaying it, so the transition is free.
+    setLeaving(true);
     try {
       const { id } = await startMission(objective);
       router.push(`/missions/${id}`);
     } catch (err) {
       setError(String(err));
       setBusy(false);
+      setLeaving(false);
     }
   };
 
-
   return (
-    <main className="ask-main">
+    <main className={`board${leaving ? " leaving" : ""}`}>
       <HowThisWorks />
 
-      <section className="ask">
+      <Panel className="ask-panel">
         <VoiceLine
           className="alive-voice-hero"
           line={liveRetrieval
@@ -133,11 +153,61 @@ export default function Board() {
           ))}
         </div>
         {error && <p className="muted">{error}</p>}
-      </section>
+      </Panel>
+
+      {/* The wall: what it has learned, what it knows, what it is doing. */}
+      <div className="wall">
+        <Panel title="How the research is holding up" className="vitals">
+          <div className="ring-row">
+            <Ring
+              value={verified} total={claims}
+              label="held up" tone="ok"
+              hint={`${verified} of ${claims} claims confirmed by more than one source`}
+            />
+            <Ring
+              value={conflicted} total={claims}
+              label="disputed" tone="warn"
+              hint={`${conflicted} kept as disagreements rather than resolved`}
+            />
+            <Ring
+              value={answered} total={missions.length}
+              label="answered" tone=""
+              hint={`${answered} of ${missions.length} questions reached a recommendation`}
+            />
+          </div>
+          <RingLegend
+            items={[
+              { tone: "ok", has: claims > 0, hint: `${verified} of ${claims} claims confirmed by more than one source` },
+              { tone: "warn", has: claims > 0, hint: `${conflicted} kept as disagreements rather than resolved` },
+              { tone: "", has: missions.length > 0, hint: `${answered} of ${missions.length} questions reached a recommendation` },
+            ]}
+          />
+          <div className="readout-row">
+            <Readout n={sources} label="sources read" />
+            <Readout n={claims} label="claims made" />
+            <Readout n={status?.episodic ?? 0} label="things it remembers" />
+          </div>
+          <p className="vitals-note">
+            Disputed is not a failure. When sources disagree the researcher keeps both and tells
+            you, rather than picking the one that reads better.
+          </p>
+        </Panel>
+
+        <div className="centre">
+          <KnowledgeGraph running={running} />
+        </div>
+
+        <Panel
+          title="Live activity"
+          meta={running ? <span className="hp-live">working</span> : <span className="hp-idle">idle</span>}
+          className="activity"
+        >
+          <Feed events={events} />
+        </Panel>
+      </div>
 
       {missions.length > 0 && (
-        <section className="answers">
-          <h2>Everything you have asked <span className="muted">· newest first</span></h2>
+        <Panel title="Everything you have asked" meta="newest first" className="answers">
           <ul className="answer-list alive-cascade">
             {missions.map((m, i) => {
               const state = OUTCOME[m.status] ?? { word: "Working on it", cls: "busy" };
@@ -162,10 +232,8 @@ export default function Board() {
               );
             })}
           </ul>
-        </section>
+        </Panel>
       )}
-
-      <KnowledgeGraph />
 
       <ContextGraph />
     </main>

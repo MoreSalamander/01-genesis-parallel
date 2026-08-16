@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KnowledgeEntity, getKnowledgeEntities } from "@/lib/api";
 import { useReducedMotion } from "@/lib/alive";
+import { Reticle } from "./Hud";
 
 interface Node {
   id: string; x: number; y: number; vx: number; vy: number;
@@ -90,7 +91,7 @@ const STATE_WORD: Record<string, string> = {
   VERIFIED: "Confirmed", CONFLICTED: "Sources disagree", UNVERIFIED: "Single source",
 };
 
-export function KnowledgeGraph() {
+export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const nodesRef = useRef<Node[]>([]);
   const [entities, setEntities] = useState<Record<string, KnowledgeEntity>>({});
@@ -99,6 +100,11 @@ export function KnowledgeGraph() {
   // effect and re-settle the whole layout on every mouse move.
   const hoveredRef = useRef<string | null>(null);
   const [hoverName, setHoverName] = useState<string | null>(null);
+  // Selection is a ref for the same reason as hover: as a dependency it re-ran
+  // the effect and re-settled the entire layout on every click — 260 ticks of
+  // O(n²) repulsion to arrive at the identical picture.
+  const selectedRef = useRef<string | null>(null);
+  const drawRef = useRef<(() => void) | null>(null);
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -124,9 +130,17 @@ export function KnowledgeGraph() {
     canvas.width = W * dpr; canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // The canvas is drawn in a 720-wide space and displayed around 430 wide, so
+    // every label at once is a 6px mat of overlapping text at 106 entities.
+    // Name the ones carrying the most, and let hover name the rest.
+    const labelled = new Set(
+      [...nodes].sort((a, b) => b.claims - a.claims).slice(0, 12).map((n) => n.id),
+    );
+
     const draw = () => {
       // Recomputed each frame so hover responds without restarting the layout.
-      const focus = hoveredRef.current ?? selected;
+      const sel = selectedRef.current;
+      const focus = hoveredRef.current ?? sel;
       const near = new Set<string>();
       if (focus) {
         for (const [i, j] of edges) {
@@ -135,11 +149,13 @@ export function KnowledgeGraph() {
         }
       }
       ctx.clearRect(0, 0, W, H);
+      // 390 edges across 106 nodes drawn at full strength is a grey mat that
+      // buries the nodes. They are context, so they sit back until you point.
       for (const [i, j] of edges) {
         const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
         ctx.strokeStyle = lit ? accent : line;
         ctx.lineWidth = lit ? 1.6 : 1;
-        ctx.globalAlpha = focus === null ? 1 : lit ? 0.9 : 0.25;
+        ctx.globalAlpha = focus === null ? 0.38 : lit ? 0.9 : 0.14;
         ctx.beginPath();
         ctx.moveTo(nodes[i].x, nodes[i].y);
         ctx.lineTo(nodes[j].x, nodes[j].y);
@@ -147,9 +163,13 @@ export function KnowledgeGraph() {
       }
       ctx.globalAlpha = 1;
       for (const n of nodes) {
-        const on = n.id === selected || n.id === focus;
+        const on = n.id === sel || n.id === focus;
         const related = focus !== null && (n.id === focus || near.has(n.id));
-        ctx.globalAlpha = focus === null || related ? 1 : 0.3;
+        // Most entities are known from a single fact. They stay on the board —
+        // hiding them would misrepresent how much is thinly sourced — but they
+        // sit back so the ones the studio actually knows well read first.
+        const thin = n.claims <= 1 ? 0.5 : 1;
+        ctx.globalAlpha = focus === null ? thin : related ? 1 : 0.22;
         const colour = n.disputed ? warn : accent;
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
@@ -161,10 +181,12 @@ export function KnowledgeGraph() {
           ctx.strokeStyle = colour; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.stroke();
           ctx.globalAlpha = 1;
         }
-        ctx.fillStyle = on ? css.getPropertyValue("--ink").trim() || "#fff" : ink;
-        ctx.font = `${on ? "600 " : ""}11px ui-sans-serif, system-ui, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.fillText(n.id.length > 22 ? `${n.id.slice(0, 21)}…` : n.id, n.x, n.y + n.r + 13);
+        if (labelled.has(n.id) || related) {
+          ctx.fillStyle = on ? css.getPropertyValue("--ink").trim() || "#fff" : ink;
+          ctx.font = `${on ? "600 " : ""}13px ui-sans-serif, system-ui, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(n.id.length > 22 ? `${n.id.slice(0, 21)}…` : n.id, n.x, n.y + n.r + 14);
+        }
       }
       ctx.globalAlpha = 1;
     };
@@ -175,7 +197,10 @@ export function KnowledgeGraph() {
     // the graph is never frozen. The drift is ambient — it claims nothing.
     settle(nodes, edges, TICKS);
     for (const n of nodes) { n.bx = n.x; n.by = n.y; n.phase = Math.random() * Math.PI * 2; }
+    drawRef.current = draw;
     draw();
+    // Reduced motion draws the settled layout once and stops. The redraw effect
+    // below is what keeps hover and selection working without this loop.
     if (reduced) return;
 
     let raf = 0;
@@ -191,7 +216,16 @@ export function KnowledgeGraph() {
     };
     raf = requestAnimationFrame(drift);
     return () => cancelAnimationFrame(raf);
-  }, [entities, names.length, reduced, selected]);
+  }, [entities, names.length, reduced]);
+
+  // Selection and hover feed the canvas through refs, so React re-rendering is
+  // not enough to repaint it. With motion reduced there is no animation loop to
+  // pick the change up on the next frame, which left hover and selection doing
+  // nothing at all for those users; this repaints on demand.
+  useEffect(() => {
+    selectedRef.current = selected;
+    drawRef.current?.();
+  }, [selected, hoverName]);
 
   // Map a click in CSS pixels onto the canvas's logical coordinate space, since
   // the canvas is laid out responsively rather than at its intrinsic size.
@@ -224,6 +258,9 @@ export function KnowledgeGraph() {
   if (names.length === 0) return null;
   const entity = selected ? entities[selected] : null;
   const disputedCount = names.filter((n) => (entities[n].assertions ?? []).some((a) => a.disputed)).length;
+  // How many are known from more than one fact. Most are not, and a Studio Head
+  // should be told that rather than left to infer it from a dense picture.
+  const wellKnown = names.filter((n) => (entities[n].assertions ?? []).length > 1).length;
 
   return (
     <section className="panel graph-panel">
@@ -231,27 +268,31 @@ export function KnowledgeGraph() {
         What the studio has learned
         <span className="muted">
           {" · "}{names.length} companies and people it now tracks
+          {`, ${wellKnown} known from more than one fact`}
           {disputedCount > 0 ? `, ${disputedCount} with something disputed` : ""}
         </span>
       </h2>
 
       <div className="graph-layout">
         <div className="graph-wrap">
-          <canvas
-            ref={canvasRef}
-            onClick={pick}
-            onMouseMove={track}
-            onMouseLeave={() => { hoveredRef.current = null; setHoverName(null); }}
-            style={{
-              width: "100%", maxWidth: W, height: "auto", aspectRatio: `${W} / ${H}`,
-              cursor: hoverName ? "pointer" : "default",
-            }}
-            role="img"
-            aria-label={`${names.length} entities. Use the list below to inspect each one.`}
-          />
+          <Reticle running={running}>
+            <canvas
+              ref={canvasRef}
+              onClick={pick}
+              onMouseMove={track}
+              onMouseLeave={() => { hoveredRef.current = null; setHoverName(null); }}
+              style={{
+                width: "100%", maxWidth: W, height: "auto", aspectRatio: `${W} / ${H}`,
+                cursor: hoverName ? "pointer" : "default",
+              }}
+              role="img"
+              aria-label={`${names.length} entities. Use the list below to inspect each one.`}
+            />
+          </Reticle>
           <p className="graph-legend">
             Bigger means more has been asserted. Amber means something about them is disputed.
-            A line means one question learned about both. Click any node — or use the list.
+            A line means one question learned about both. Only the busiest are named — hover to
+            light up any other and everything it connects to, or click to read it.
           </p>
         </div>
 

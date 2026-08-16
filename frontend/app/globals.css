@@ -564,3 +564,136 @@ td.num { font-variant-numeric: tabular-nums; }
 .raw-log[open] > summary::before { content: "▾ "; }
 .raw-log > summary:hover { color: var(--ink-2); }
 .raw-log .log { margin-top: 10px; }
+
+/* ── HUD board ───────────────────────────────────────────────────────────
+   Instrumentation for the signal desk: notched panels, tick rings and thin
+   bright strokes on near-black. Form borrowed from a heads-up display; the
+   values are all real (see components/Hud.tsx). Blue throughout — this is the
+   signal desk and it keeps its own colour. */
+:root {
+  --hud-edge: color-mix(in srgb, var(--accent) 34%, var(--line));
+  --notch: polygon(12px 0, 100% 0, 100% calc(100% - 12px),
+                   calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+
+.board { transition: opacity 320ms var(--alive-ease), transform 320ms var(--alive-ease); }
+/* Leaving for an answer: the board pulls back rather than cutting. Runs while
+   the request is in flight, so it costs no time. */
+.board.leaving { opacity: 0.32; transform: scale(0.985); pointer-events: none; }
+
+.hud-panel { position: relative; background: var(--hud-edge); clip-path: var(--notch); margin-bottom: 14px; }
+.hud-panel::before {
+  content: ""; position: absolute; inset: 1px; background: var(--surface);
+  clip-path: var(--notch); pointer-events: none;
+}
+.hud-panel > * { position: relative; z-index: 1; }
+.hp-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 11px 16px 9px; border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+.hp-head h2 {
+  margin: 0; font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase;
+  font-weight: 600; color: var(--ink-2);
+}
+.hp-meta { font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: 0.06em; }
+.hp-live { color: var(--accent); }
+.hp-live::before, .hp-idle::before { content: "◆ "; }
+.hp-idle { color: var(--muted); }
+.hp-body { padding: 14px 16px 16px; }
+.ask-panel .hp-body { padding: 22px 22px 20px; }
+
+/* The wall: vitals · central instrument · live activity */
+.wall {
+  display: grid; gap: 14px; align-items: start;
+  grid-template-columns: minmax(228px, 286px) minmax(0, 1fr) minmax(228px, 286px);
+}
+@media (max-width: 1240px) { .wall { grid-template-columns: 1fr; } }
+.centre { min-width: 0; }
+.centre .graph-panel { margin: 0; }
+
+/* Ring gauges. A ring with no denominator draws its track and reads "—". */
+.ring-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.hud-ring { position: relative; text-align: center; }
+.hud-ring svg { width: 100%; display: block; aspect-ratio: 1; overflow: visible; }
+.hr-ticks line { stroke: var(--line); stroke-width: 1; }
+.hr-ticks line.long { stroke: color-mix(in srgb, var(--accent) 50%, var(--line)); stroke-width: 1.4; }
+.hr-track { fill: none; stroke: var(--line); stroke-width: 5; }
+.hr-arc {
+  fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round;
+  transition: stroke-dashoffset 700ms var(--alive-ease);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+.hud-ring.ok .hr-arc { stroke: var(--good); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--good) 60%, transparent)); }
+.hud-ring.warn .hr-arc { stroke: var(--warn); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warn) 60%, transparent)); }
+.hr-mid {
+  position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+}
+.hr-mid b { font-family: var(--mono); font-size: 19px; font-weight: 600; color: var(--ink); }
+.hr-mid b.none { color: var(--muted); font-weight: 400; }
+.hr-label { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.ring-legend { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 5px; }
+.ring-legend li { display: flex; gap: 7px; align-items: flex-start; font-size: 11px; line-height: 1.45; color: var(--muted); }
+.rl-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; margin-top: 4px; }
+.ring-legend li.ok .rl-dot { background: var(--good); }
+.ring-legend li.warn .rl-dot { background: var(--warn); }
+.readout-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 14px; }
+.hud-readout {
+  border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 1px;
+}
+.hud-readout b { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--ink); }
+.hud-readout span { font-size: 10.5px; color: var(--muted); letter-spacing: 0.04em; }
+.vitals-note { margin: 14px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+
+/* The frame around the central instrument. */
+.hud-reticle { position: relative; padding: 10px 14px; }
+.ret-rings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ret-rings circle { fill: none; stroke: color-mix(in srgb, var(--accent) 20%, transparent); vector-effect: non-scaling-stroke; }
+.ret-rings line { stroke: color-mix(in srgb, var(--accent) 16%, transparent); vector-effect: non-scaling-stroke; }
+.ret-rings line.long { stroke: color-mix(in srgb, var(--accent) 42%, transparent); }
+.ret-inner { position: relative; z-index: 1; }
+.ret-corner { position: absolute; width: 13px; height: 13px; border: 1px solid var(--accent); opacity: 0.65; pointer-events: none; }
+.ret-corner.tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.ret-corner.tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.ret-corner.bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.ret-corner.br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+/* The sweep turns only while a question is genuinely being worked. */
+.ret-sweep {
+  position: absolute; inset: 0; pointer-events: none; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg,
+              color-mix(in srgb, var(--accent) 15%, transparent) 24deg, transparent 42deg);
+  animation: ret-sweep 3.6s linear infinite;
+}
+@keyframes ret-sweep { to { transform: rotate(360deg); } }
+
+/* Live activity */
+.hud-feed { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 11.5px; max-height: 318px; overflow-y: auto; }
+.hud-feed li {
+  display: flex; gap: 8px; padding: 4px 3px; color: var(--ink-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+.fe-time { color: var(--muted); flex: none; }
+.fe-what { min-width: 0; }
+.hud-feed li.ok .fe-what { color: var(--good); }
+.hud-feed li.warn .fe-what { color: var(--warn); }
+.hud-feed li.fresh { animation: fe-land 900ms var(--alive-ease); }
+@keyframes fe-land {
+  from { background: color-mix(in srgb, var(--accent) 24%, transparent); transform: translateX(-6px); }
+  to { background: transparent; transform: none; }
+}
+.feed-empty { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .board, .hr-arc { transition: none; }
+  .ret-sweep, .hud-feed li.fresh { animation: none; }
+}
+
+/* The graph moved into the centre column of the wall, which is far narrower
+   than the full-width panel it used to occupy. Two fixes:
+     · .graph-wrap was a flex ROW, so the reticle and the legend paragraph sat
+       side by side and the legend collapsed to one character per line.
+     · .graph-layout reserved a 300px detail column that no longer fits. */
+.graph-wrap { flex-direction: column; align-items: stretch; background: none; border: 0; padding: 0; }
+.centre .graph-layout { grid-template-columns: 1fr; gap: 12px; }
+.centre .graph-detail { max-height: 210px; overflow-y: auto; }
+.centre .graph-nodes { max-height: 118px; overflow-y: auto; }
