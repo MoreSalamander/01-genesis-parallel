@@ -62,6 +62,14 @@ export interface KnowledgeEntity {
 export const getStatus = () => api<SystemStatus>("/api/status");
 export const getKnowledgeEntities = () =>
   api<Record<string, KnowledgeEntity>>("/api/knowledge/entities");
+
+/** One recorded provenance link: how a thing got here, and from what. */
+export interface RelationshipRecord {
+  src_kind: string; src: string; rel: string;
+  dst_kind: string; dst: string; mission_id: string;
+}
+export const getKnowledgeRelationships = (limit = 400) =>
+  api<RelationshipRecord[]>(`/api/knowledge/relationships?limit=${limit}`);
 export const listMissions = () => api<MissionSummary[]>("/api/missions");
 export const getMission = (id: string) => api<MissionDetail>(`/api/missions/${id}`);
 export const getEvents = (limit = 300) => api<EventRecord[]>(`/api/events?limit=${limit}`);

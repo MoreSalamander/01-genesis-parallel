@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { MissionChip } from "./components/Chips";
 import { HowThisWorks } from "./components/HowThisWorks";
+import { ContextGraph } from "./components/ContextGraph";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
 import { Note, Rolling, VoiceLine, cascade, proofState, useCursorGlow } from "@/lib/alive";
 
@@ -149,6 +150,8 @@ export default function Board() {
       )}
 
       <KnowledgeGraph />
+
+      <ContextGraph />
     </main>
   );
 }
