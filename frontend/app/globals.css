@@ -528,3 +528,39 @@ td.num { font-variant-numeric: tabular-nums; }
 .cd-links li { display: flex; gap: 10px; align-items: baseline; font-size: 12.5px; color: var(--muted); }
 .cd-n { font: 700 12px var(--mono); color: var(--ink); min-width: 3ch; text-align: right; }
 .cd-links b { color: var(--accent); font-weight: 600; }
+
+/* Everything you have asked — a list that reads, not a table of columns. */
+.answers { margin-top: 26px; }
+.answers > h2 {
+  font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  font-weight: 600; margin: 0 0 10px;
+}
+.answer-list { list-style: none; margin: 0; padding: 0; }
+.answer-row {
+  display: grid; gap: 4px; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid transparent; color: var(--ink); text-decoration: none;
+}
+.answer-row:hover { border-color: var(--line); background: var(--surface); text-decoration: none; }
+.answer-row .q { font-size: 14.5px; line-height: 1.45; }
+.answer-row .line {
+  display: flex; flex-wrap: wrap; gap: 7px; align-items: baseline;
+  font-size: 12px; color: var(--muted);
+}
+.answer-row .sep { color: var(--line); }
+.answer-row .state { font-weight: 600; }
+.answer-row .state.ok { color: var(--good); }
+.answer-row .state.wait { color: var(--accent); }
+.answer-row .state.busy { color: var(--ink-2); }
+.answer-row .state.off { color: var(--muted); }
+.answer-row .conflict { color: var(--warn); }
+
+/* The machine record: present for auditing, quiet by default. */
+.raw-log > summary {
+  cursor: pointer; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600; list-style: none;
+}
+.raw-log > summary::-webkit-details-marker { display: none; }
+.raw-log > summary::before { content: "▸ "; color: var(--line); }
+.raw-log[open] > summary::before { content: "▾ "; }
+.raw-log > summary:hover { color: var(--ink-2); }
+.raw-log .log { margin-top: 10px; }

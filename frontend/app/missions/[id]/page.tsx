@@ -55,7 +55,14 @@ export default function MissionPage() {
     [mission],
   );
 
-  if (!mission) return <p className="muted">Loading mission…</p>;
+  if (!mission) {
+    return (
+      <div className="answer-head">
+        <div className="asked">fetching</div>
+        <VoiceLine line="One moment — I'm pulling up everything I found for this question." thinking />
+      </div>
+    );
+  }
 
   const unverified = mission.claims.filter((c) => c.status === "UNVERIFIED").length;
   const running = ACTIVE_STATUSES.has(mission.status);
@@ -191,13 +198,18 @@ export default function MissionPage() {
       </section>
 
       <section className="panel">
-        <h2>Raw agent log <span className="muted">· the unedited machine record, for when you want to check my work</span></h2>
+        <details className="raw-log">
+          <summary>
+            Raw agent log
+            <span className="muted"> · the unedited machine record, if you want to check my work</span>
+          </summary>
         <div className="log">
           {events.slice(-40).reverse().map((e, i) => (
             <div key={i}><span className="e">{e.event}</span> {summarize(e)}</div>
           ))}
           {events.length === 0 && <span className="muted">No events yet.</span>}
         </div>
+        </details>
       </section>
     </main>
   );

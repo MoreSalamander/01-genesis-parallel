@@ -39,6 +39,15 @@ const FIXTURE_STARTERS = [
   "Who is building virtual production capacity?",
 ];
 
+/* What happened to a question, said the way you would say it. */
+const OUTCOME: Record<string, { word: string; cls: string }> = {
+  APPROVED: { word: "You accepted this", cls: "ok" },
+  REJECTED: { word: "You discarded this", cls: "off" },
+  MORE_RESEARCH_REQUESTED: { word: "Sent back for more", cls: "busy" },
+  RECOMMENDED: { word: "Waiting on your decision", cls: "wait" },
+  INCOMPLETE: { word: "Couldn\u2019t finish honestly", cls: "off" },
+};
+
 export default function Board() {
   const router = useRouter();
   const [missions, setMissions] = useState<MissionSummary[]>([]);
@@ -78,7 +87,6 @@ export default function Board() {
     }
   };
 
-  const answered = missions.filter((m) => m.has_recommendation);
 
   return (
     <main className="ask-main">
@@ -127,25 +135,33 @@ export default function Board() {
         {error && <p className="muted">{error}</p>}
       </section>
 
-      {answered.length > 0 && (
-        <section className="panel alive-raised">
-          <h2>Answers on record <span className="muted">· every number traceable to a source</span></h2>
-          <table>
-            <thead>
-              <tr><th>Question</th><th>Status</th><th>Sources</th><th>Held up</th><th>Conflicts</th></tr>
-            </thead>
-            <tbody className="alive-cascade">
-              {missions.map((m, i) => (
-                <tr key={m.id} style={cascade(i)}>
-                  <td><Link href={`/missions/${m.id}`}>{m.objective}</Link></td>
-                  <td><MissionChip status={m.status} running={ACTIVE_STATUSES.has(m.status)} /></td>
-                  <td className="num"><Rolling value={m.sources} /></td>
-                  <td className="num"><Rolling value={m.verified} /></td>
-                  <td className="num"><Rolling value={m.conflicted} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {missions.length > 0 && (
+        <section className="answers">
+          <h2>Everything you have asked <span className="muted">· newest first</span></h2>
+          <ul className="answer-list alive-cascade">
+            {missions.map((m, i) => {
+              const state = OUTCOME[m.status] ?? { word: "Working on it", cls: "busy" };
+              return (
+                <li key={m.id} style={cascade(i)}>
+                  <Link href={`/missions/${m.id}`} className="answer-row alive-track">
+                    <span className="q">{m.objective}</span>
+                    <span className="line">
+                      <span className={`state ${state.cls}`}>{state.word}</span>
+                      <span className="sep">·</span>
+                      <span>{m.sources} sources read</span>
+                      {m.verified > 0 && <><span className="sep">·</span><span>{m.verified} confirmed</span></>}
+                      {m.conflicted > 0 && (
+                        <><span className="sep">·</span>
+                        <span className="conflict">
+                          {m.conflicted} disagreement{m.conflicted === 1 ? "" : "s"} kept
+                        </span></>
+                      )}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 
