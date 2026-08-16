@@ -66,8 +66,12 @@ def _runtime_proof(settings) -> dict:
         "parallel": (("LIVE", "PARALLEL_API_KEY present — live web retrieval")
                      if settings.parallel_live
                      else ("MOCK", "no PARALLEL_API_KEY — fixture sources")),
-        "temporal": ("IDLE", f"configured at {settings.temporal_address} — "
-                             "no workflow dispatched yet this session"),
+        # An unset address means Temporal is not part of this deployment, not
+        # that it broke — dialling it would report DEGRADED and read as a fault.
+        "temporal": (("IDLE", f"configured at {settings.temporal_address} — "
+                              "no workflow dispatched yet this session")
+                     if settings.temporal_address
+                     else ("MOCK", "no TEMPORAL_ADDRESS — in-process execution for this deployment")),
         "datahub": ("IDLE", f"configured at {settings.datahub_gms_url} — nothing promoted yet"),
     })
 
