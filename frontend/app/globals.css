@@ -831,12 +831,6 @@ td.num { font-variant-numeric: tabular-nums; }
 /* --- a question the system raised for itself (components/AgentFleet.tsx) ----
    It sits on the board like any other question, and says plainly that it was
    raised rather than typed. */
-.raised-tag {
-  display: inline-block; margin-right: 8px; padding: 1px 6px; border-radius: 3px;
-  font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
-  vertical-align: 1px;
-}
 .raised-from { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); margin: 0 0 10px; }
 .raised-from a { color: var(--accent); }
 .raised-row {

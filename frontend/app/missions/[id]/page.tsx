@@ -88,10 +88,12 @@ export default function MissionPage() {
   return (
     <main>
       <header className="answer-head">
-        {/* Never tell the Studio Head they asked something the system asked
-            itself. The board is allowed to carry both; it is not allowed to
-            confuse them. */}
-        <div className="asked">{mission.raised_by ? "it asked itself" : "you asked"}</div>
+        {/* Every question is presented the same way, raised or typed — the page
+            reads as an answer to a question either way. The provenance is not
+            lost: it is recorded on the mission, drawn in the context graph, and
+            stated in full by the panel below, which links back to whatever
+            question led here. */}
+        <div className="asked">you asked</div>
         <h1 className="question">{mission.objective}</h1>
         <div className="row" style={{ gap: 12 }}>
           <MissionChip status={mission.status} running={running} />
