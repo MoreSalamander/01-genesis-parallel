@@ -48,6 +48,7 @@ const FOCAL = 900;          // perspective strength: larger is flatter
    The controls write into a ref the simulation reads each tick, so moving one
    re-shapes the running model rather than restarting it. */
 const SUN_R = 74;              // how far the contested mass spreads from the anchor
+const PLANE_FLATTEN = 0.09;    // how hard the plane arrangement holds its disc
 
 export interface Forces {
   wire: number;      // length of the wire to the anchor — the shell's radius
@@ -61,10 +62,16 @@ export interface Forces {
      of these". They are coloured separately because they mean separately. */
   edgeColour: string;
   edgeWidth: number;   // and how thick
+  /* Which arrangement the settled material takes around the contested core:
+     a shell in every direction, or a plane through it. Both say the same thing
+     about the core and a different thing about the rest — a shell reads as a body
+     with an inside, a plane reads as a system you are looking across. */
+  shape: "sphere" | "plane";
 }
 export const DEFAULT_FORCES: Forces = {
   wire: 250, pull: 0.05, push: 1500, spacing: 90,
   glow: 0.16, colour: "#c0c6d4", edgeColour: "#3987e5", edgeWidth: 1,
+  shape: "sphere",
 };
 
 /* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
@@ -169,13 +176,20 @@ function step(nodes: Node[], f: Forces): number {
       const dist = Math.max(1, Math.hypot(ox, oy, oz));
       const gap = (SUN_R - dist) * f.pull * 1.6;
       n.vx += (ox / dist) * gap; n.vy += (oy / dist) * gap; n.vz += (oz / dist) * gap;
+    } else if (f.shape === "plane") {
+      // A plane: held at wire length within it, and flattened onto it. The core
+      // still sits at the centre, so this is the same statement seen edge-on.
+      const flat = Math.max(1, Math.hypot(ox, oz));
+      const gap = (f.wire - flat) * f.pull;
+      n.vx += (ox / flat) * gap;
+      n.vz += (oz / flat) * gap;
+      n.vy += (H / 2 - n.y) * PLANE_FLATTEN;
     } else {
-      // The shell: held at wire length in every direction, so the settled
-      // material forms a sphere around the contested core rather than a plane
-      // through it. Only the radius is constrained — where a node sits on the
-      // shell is left to the push between them, which is what makes the spacing
-      // even rather than assigned. (A sphere covered by mutual repulsion is the
-      // Thomson arrangement; nothing here has to compute it, only allow it.)
+      // A shell: held at wire length in every direction. Only the radius is
+      // constrained — where a node sits on the shell is left to the push between
+      // them, which is what makes the spacing even rather than assigned. A sphere
+      // covered by mutual repulsion arrives at an even covering on its own;
+      // nothing here computes one, it only allows it.
       const dist = Math.max(1, Math.hypot(ox, oy, oz));
       const gap = (f.wire - dist) * f.pull;
       n.vx += (ox / dist) * gap;
@@ -287,6 +301,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       drawRef.current?.();
       return;
     }
+    // A shape change is a different arrangement, not a nudge, so it gets enough
+    // ticks to actually arrive rather than the handful a slider needs.
+    if (key === "shape") { stepRef.current?.(160); return; }
     // Settle and repaint on the spot rather than waiting for the animation loop.
     // The loop is not always there: reduced motion has none at all, and a
     // background tab has requestAnimationFrame suspended — in both cases the
@@ -746,6 +763,19 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               <input type="range" min={0.4} max={4} step={0.2} value={forces.edgeWidth}
                      onChange={(e) => setForce("edgeWidth", Number(e.target.value))} />
             </label>
+            <div className="gf-shape" role="group" aria-label="Arrangement">
+              {(["sphere", "plane"] as const).map((option) => (
+                <button
+                  key={option}
+                  className={forces.shape === option ? "on" : ""}
+                  aria-pressed={forces.shape === option}
+                  onClick={() => setForce("shape", option)}
+                  title={option === "sphere"
+                    ? "Settled material on a shell around the contested core"
+                    : "Settled material on a plane through the contested core"}
+                >{option}</button>
+              ))}
+            </div>
             <button className={`gf-tour${touring ? " on" : ""}`}
                     onClick={() => setTouring((t) => !t)}
                     aria-pressed={touring}

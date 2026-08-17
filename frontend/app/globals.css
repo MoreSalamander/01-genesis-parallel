@@ -1463,3 +1463,11 @@ td.num { font-variant-numeric: tabular-nums; }
 .graph-tour b { color: var(--ink); }
 .graph-tour .gt-count { font: 10px var(--mono); color: var(--muted); min-width: 74px; }
 .graph-tour .gt-why { font: 10.5px var(--mono); color: var(--warn); margin-left: auto; }
+.gf-shape { display: flex; align-self: end; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.gf-shape button {
+  cursor: pointer; background: none; border: 0; padding: 3px 9px;
+  font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.gf-shape button + button { border-left: 1px solid var(--line); }
+.gf-shape button:hover { color: var(--ink); }
+.gf-shape button.on { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); }
