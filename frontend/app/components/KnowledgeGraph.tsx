@@ -440,8 +440,20 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         const colour = n.disputed ? warn : accent;
         ctx.beginPath();
         ctx.arc(n.sx!, n.sy!, n.sr!, 0, Math.PI * 2);
-        ctx.fillStyle = colour; ctx.globalAlpha = on ? 0.5 : 0.26; ctx.fill(); ctx.globalAlpha = 1;
-        ctx.strokeStyle = colour; ctx.lineWidth = on ? 2.5 : 1.5; ctx.stroke();
+        /* A node in the current connection fills solid; everything else stays a
+           hollow ring. Whether a node is *in* the thing being shown is the only
+           question the cycle asks, and a difference in alpha between 0.26 and 0.5
+           is not an answer you can see across four hundred of them. Solid against
+           hollow is legible at a glance, and it keeps the amber/accent meaning —
+           what fills is still coloured by whether it is disputed. */
+        const inConnection = focus !== null && related;
+        ctx.fillStyle = colour;
+        ctx.globalAlpha = inConnection ? 1 : on ? 0.5 : 0.26;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
+        ctx.stroke();
         if (on) {                                   // selection ring
           ctx.beginPath();
           ctx.arc(n.sx!, n.sy!, n.sr! + 6, 0, Math.PI * 2);
