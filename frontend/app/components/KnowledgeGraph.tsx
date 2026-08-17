@@ -447,44 +447,32 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         // Most entities are known from a single fact. They stay on the board —
         // hiding them would misrepresent how much is thinly sourced — but they
         // sit back so the ones the studio actually knows well read first.
+        /* One alpha for the whole node, ring included.
+
+           The ring used to be forced to full opacity while the fill sat at 26%,
+           which is why the nodes still read as solid discs however transparent
+           the fill was: six hundred opaque outlines are six hundred solid shapes.
+           A node is see-through or it is not, and its outline is part of it.
+
+           The depth and thin-node factors were also computed here and then thrown
+           away by the next assignment, so neither ever reached a node: everything
+           drew at the same weight whether it was near or far, known from one fact
+           or fifteen. They apply now. */
         const thin = n.claims <= 1 ? 0.5 : 1;
-        ctx.globalAlpha = (focus === null ? thin : related ? 1 : 0.22) * fade(n);
+        const depth = (focus === null ? thin : related ? 1 : 0.22) * fade(n);
         const colour = n.disputed ? warn : accent;
+        const inConnection = focus !== null && related;
+
         ctx.beginPath();
         ctx.arc(n.sx!, n.sy!, n.sr!, 0, Math.PI * 2);
-        /* A node in the current connection fills solid; everything else stays a
-           hollow ring. Whether a node is *in* the thing being shown is the only
-           question the cycle asks, and a difference in alpha between 0.26 and 0.5
-           is not an answer you can see across four hundred of them. Solid against
-           hollow is legible at a glance, and it keeps the amber/accent meaning —
-           what fills is still coloured by whether it is disputed. */
-        const inConnection = focus !== null && related;
-        /* Backed with the panel colour before its own is applied. A node is drawn
-           at 26% when it is not part of what is being shown, which means anything
-           behind it shows through — and with the connections now painting over the
-           anchor wires, that was the connection colour: pick red for connections
-           and the nodes went red with them. A node has to look like itself
-           whatever is behind it, so the disc is made opaque first. */
-        /* In the connection: filled solid in the connection's own colour, so the
-           fan reads as one system — the lines and the nodes they touch are the
-           same thing being shown.
-
-           Out of it: transparent, its own colour at 26% with nothing behind it,
-           so the wires and connections it sits over show through. There was an
-           opaque backing here for one revision, put in to stop the connection
-           colour tinting the fills — it worked, and it also made every unlit node
-           a flat disc that hid the structure behind it. Transparency was the
-           point, and a tint from what is genuinely behind a node is what
-           transparency looks like, not a bug. */
+        // Solid only while it is part of the fan the sequence is holding.
         ctx.fillStyle = inConnection ? edgeInk : colour;
-        ctx.globalAlpha = inConnection ? 1 : on ? 0.5 : 0.26;
+        ctx.globalAlpha = inConnection ? 1 : (on ? 0.5 : 0.26) * depth;
         ctx.fill();
-        ctx.globalAlpha = 1;
-        /* The ring stays the node's own colour even when the fill does not, so
-           amber still means disputed while it is part of a fan. The fill answers
-           "is this in what I am looking at", the ring answers "is this contested",
-           and neither question should cost the other its answer. */
+        // The ring carries the node's own colour — amber still means disputed
+        // while the fill is showing the connection — at the node's own transparency.
         ctx.strokeStyle = colour;
+        ctx.globalAlpha = inConnection ? 1 : (on ? 0.85 : 0.5) * depth;
         ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
         ctx.stroke();
         if (on) {                                   // selection ring
