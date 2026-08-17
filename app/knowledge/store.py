@@ -91,6 +91,53 @@ class LocalGraphStore:
 
         return [record for _, record in sorted(keep.items())]
 
+    def nested_questions(self, limit: int = 40) -> list[dict]:
+        """Every nested question the system has raised, newest first.
+
+        These have been recorded since the loop was written — `objective ─raised─>
+        gap` — but the console only ever looked for missions carrying `raised_by`,
+        which exists solely on the ones dispatched as their own mission. Sixty-four
+        questions were in this file while the tracker read "none yet".
+
+        So the question itself is the record, and a mission of its own is an extra
+        the question may or may not have: `gap ─answered by─> objective` when it
+        was dispatched, absent when its research was folded into its parent.
+        """
+        if not self.relationships_path.exists():
+            return []
+
+        raised: list[dict] = []
+        answered: dict[str, str] = {}
+        for line in self.relationships_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip() or '"gap"' not in line:
+                continue          # cheap reject before the parse
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record.get("dst_kind") == "gap" and record.get("rel") == "raised":
+                raised.append(record)
+            elif record.get("src_kind") == "gap" and record.get("rel") == "answered by":
+                answered[record.get("src", "")] = record.get("dst", "")
+
+        # Newest first. The log has no timestamp on a relationship, so file order
+        # is the only ordering there is — and it is the true one.
+        out: list[dict] = []
+        seen: set[str] = set()
+        for record in reversed(raised):
+            question = record.get("dst", "")
+            if not question or question in seen:
+                continue
+            seen.add(question)
+            out.append({
+                "question": question,
+                "raised_by": record.get("src", "") or record.get("mission_id", ""),
+                "answered_by": answered.get(question, ""),
+            })
+            if len(out) >= limit:
+                break
+        return out
+
     # -- writes --------------------------------------------------------------
     def ingest_mission(self, mission: Mission) -> list[str]:
         """Promote qualifying claims into durable knowledge. Returns touched entity names."""

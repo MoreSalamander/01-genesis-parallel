@@ -167,6 +167,30 @@ def agents() -> dict:
     return roster.roster()
 
 
+@router.get("/nested-questions")
+def nested_questions(limit: int = 40) -> list[dict]:
+    """The questions the system raised from its own answers, newest first.
+
+    Read from the graph, not from missions carrying `raised_by`: a nested question
+    is recorded the moment it is raised, whether or not it was also dispatched as
+    a mission of its own. Looking only for dispatched ones is why the tracker read
+    "none yet" while sixty-four sat in the store.
+    """
+    runtime = get_runtime()
+    objectives = {m.id: m.objective for m in runtime.working.all()}
+    out = []
+    for item in runtime.knowledge.nested_questions(limit):
+        answered = item["answered_by"]
+        out.append({
+            **item,
+            "raised_by_objective": objectives.get(item["raised_by"], ""),
+            # Present only when the question was dispatched as its own mission;
+            # the rest had their research folded into the answer that raised them.
+            "status": (objectives.get(answered) and "answered") or ("answered" if answered else "folded"),
+        })
+    return out
+
+
 @router.get("/fleet")
 def fleet() -> dict:
     """What every agent and every line of enquiry has actually done, all-time.

@@ -560,3 +560,36 @@ def test_the_nested_researcher_name_stays_a_key_not_a_label():
     src = inspect.getsource(Executive._research_gaps)
     assert 'specialist="follow-up researcher"' in src, \
         "the recorded specialist name changed — every historical tally now under-reports"
+
+
+def test_nested_questions_are_read_from_the_graph_not_from_dispatched_missions(tmp_path):
+    """The tracker read "none yet" for two days while 64 nested questions sat in
+    the store. It was looking for missions carrying `raised_by`, which only exists
+    on the ones dispatched as their own mission — and until that feature landed,
+    none were. The question is recorded when it is RAISED, so that is what the
+    tracker must read."""
+    import json
+
+    from app.knowledge.store import LocalGraphStore
+
+    path = tmp_path / "knowledge_relationships.jsonl"
+    path.write_text("\n".join([
+        json.dumps({"src_kind": "objective", "src": "msn_parent", "rel": "raised",
+                    "dst_kind": "gap", "dst": "What is the CPM?", "mission_id": "msn_parent"}),
+        json.dumps({"src_kind": "objective", "src": "msn_parent", "rel": "raised",
+                    "dst_kind": "gap", "dst": "Who else confirms it?", "mission_id": "msn_parent"}),
+        json.dumps({"src_kind": "gap", "src": "Who else confirms it?", "rel": "answered by",
+                    "dst_kind": "objective", "dst": "msn_child", "mission_id": "msn_parent"}),
+        # noise that must not be mistaken for a nested question
+        json.dumps({"src_kind": "source", "src": "s1", "rel": "produced",
+                    "dst_kind": "evidence", "dst": "e1", "mission_id": "msn_parent"}),
+    ]), encoding="utf-8")
+
+    found = LocalGraphStore(tmp_path).nested_questions(limit=10)
+
+    assert len(found) == 2, f"a raised question must be listed whether or not it was dispatched: {found}"
+    # Newest first.
+    assert found[0]["question"] == "Who else confirms it?"
+    assert found[0]["answered_by"] == "msn_child", "a dispatched question must link to its own answer"
+    assert found[1]["answered_by"] == "", "a folded question has no mission of its own, and must not invent one"
+    assert all(q["raised_by"] == "msn_parent" for q in found)

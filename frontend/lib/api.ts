@@ -116,6 +116,19 @@ export interface FleetTally {
 }
 export const getFleet = () => api<FleetTally>("/api/fleet");
 
+/** A question the system raised from its own answer. Recorded when it is raised,
+ *  so these exist whether or not the question was also dispatched as its own
+ *  mission — which is why the tracker reads these and not `raised_by`. */
+export interface NestedQuestion {
+  question: string;
+  raised_by: string;
+  raised_by_objective: string;
+  answered_by: string;
+  status: "answered" | "folded";
+}
+export const getNestedQuestions = (limit = 40) =>
+  api<NestedQuestion[]>(`/api/nested-questions?limit=${limit}`);
+
 /** Gemini's standing record (app/cognition_ledger.py is a window, so `on_record`
  *  says how many calls this covers rather than implying an all-time total). */
 export interface GeminiSummary {

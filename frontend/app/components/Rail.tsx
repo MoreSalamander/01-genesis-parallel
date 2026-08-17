@@ -9,15 +9,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ACTIVE_STATUSES, MissionSummary, listMissions } from "@/lib/api";
+import { ACTIVE_STATUSES, MissionSummary, NestedQuestion, getNestedQuestions, listMissions } from "@/lib/api";
 import { Rolling } from "@/lib/alive";
 
 export function Rail() {
   const [missions, setMissions] = useState<MissionSummary[]>([]);
+  const [nested, setNested] = useState<NestedQuestion[]>([]);
   const path = usePathname();
 
   useEffect(() => {
-    const load = () => listMissions().then(setMissions).catch(() => {});
+    const load = () => {
+      listMissions().then(setMissions).catch(() => {});
+      // Read from the graph, not from missions carrying raised_by: a question is
+      // recorded when it is raised, and only some are dispatched as missions.
+      getNestedQuestions(12).then(setNested).catch(() => {});
+    };
     load();
     const timer = setInterval(load, 2000);
     return () => clearInterval(timer);
@@ -30,15 +36,6 @@ export function Rail() {
   // recommendation but is finished — counting it as working left dead missions
   // "in flight" for days.
   const open = missions.filter((m) => ACTIVE_STATUSES.has(m.status)).length;
-  // Nested questions: the ones the loop raised from an answer. Being worked
-  // through comes first — the rest newest first.
-  const byId = new Map(missions.map((m) => [m.id, m]));
-  const nested = missions
-    .filter((m) => m.raised_by)
-    .sort((a, b) => {
-      const working = Number(ACTIVE_STATUSES.has(b.status)) - Number(ACTIVE_STATUSES.has(a.status));
-      return working !== 0 ? working : b.created_at.localeCompare(a.created_at);
-    });
 
   const vitals = [
     { label: "answers", value: missions.length },
@@ -86,27 +83,27 @@ export function Rail() {
               : "none yet — an answer that leaves something thin raises one here"}
           </div>
         )}
-        {nested.slice(0, 8).map((m) => {
-          const parent = byId.get(m.raised_by);
-          const working = ACTIVE_STATUSES.has(m.status);
+        {nested.map((q, i) => {
+          // Where the question goes when clicked: its own answer if it was
+          // dispatched as a mission, otherwise the answer it was raised from,
+          // which is where its research actually landed.
+          const href = `/missions/${q.answered_by || q.raised_by}`;
           return (
             <Link
-              href={`/missions/${m.id}`}
-              key={m.id}
-              className={`rail-item nested${working ? " working" : ""} alive-track${
-                path === `/missions/${m.id}` ? " on" : ""}`}
+              href={href}
+              key={`${q.question}-${i}`}
+              className={`rail-item nested alive-track${path === href ? " on" : ""}`}
             >
-              <span className="q">{m.objective}</span>
+              <span className="q">{q.question}</span>
               <span className="s">
-                {working
-                  ? <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
-                  : `${m.sources} sources`}
-                {parent && <span className="from">from: {parent.objective}</span>}
+                {q.status === "answered" ? "answered on its own" : "folded into the answer"}
+                {q.raised_by_objective && <span className="from">from: {q.raised_by_objective}</span>}
               </span>
             </Link>
           );
         })}
       </div>
+
     </aside>
   );
 }
