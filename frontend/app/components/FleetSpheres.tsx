@@ -54,12 +54,13 @@ export function FleetSpheres({ running }: { running: boolean }) {
         <span><b><Rolling value={fleet.totals.produced} /></b> quotes pulled</span>
       </div>
 
+      <div className="fleet-domains-flow">
       {fleet.domains.map((domain) => (
         <div key={domain.domain} className={`enquiry-line ${DOMAIN_CLASS[domain.domain] ?? ""}`}>
-          <div className="enquiry-head">
+          <div className="enquiry-head" title={`${domain.tasks} tasks · ${domain.sources} sources`}>
             <span className="dot" aria-hidden="true" />
             <span className="nm">{domain.domain}</span>
-            <span className="n">{domain.tasks} task{domain.tasks === 1 ? "" : "s"} · {domain.sources} sources</span>
+            <span className="n">{domain.tasks}·{domain.sources}</span>
           </div>
           <div className="spheres" role="list">
             {domain.specialists.map((spec, i) => {
@@ -86,17 +87,14 @@ export function FleetSpheres({ running }: { running: boolean }) {
           </div>
         </div>
       ))}
+      </div>
 
-      {fleet.follow_up.produced > 0 && (
-        <p className="fleet-foot">
-          A <b>nested-question researcher</b> works the questions an answer raises —
-          {" "}{fleet.follow_up.tasks} round{fleet.follow_up.tasks === 1 ? "" : "s"} so far,
-          {" "}{fleet.follow_up.produced} further quotes.
-        </p>
-      )}
       <p className="fleet-foot muted">
-        Each sphere is one cognitive role, sized by what it has actually returned. A dark one has
-        never been needed — the runtime instantiates only the roles a question calls for.
+        Each sphere is one role, sized by what it returned; a dark one has never been needed.
+        {fleet.follow_up.produced > 0 && (
+          <> A nested-question researcher adds {fleet.follow_up.produced} quotes over
+          {" "}{fleet.follow_up.tasks} round{fleet.follow_up.tasks === 1 ? "" : "s"}.</>
+        )}
       </p>
     </section>
   );

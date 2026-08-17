@@ -1123,3 +1123,45 @@ td.num { font-variant-numeric: tabular-nums; }
   padding: 10px; border: 1px solid var(--line); border-radius: 8px;
   background: color-mix(in srgb, var(--surface-2) 60%, transparent);
 }
+
+
+/* --- the wall is one column now (live activity moved to the rail) ----------- */
+.wall { grid-template-columns: minmax(0, 1fr); }
+/* At full width the distributions sit side by side instead of in one tall stack. */
+@media (min-width: 900px) {
+  .vitals-charts { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+  .vitals .ring-row { justify-content: flex-start; gap: 28px; }
+}
+
+/* --- live activity in the rail (components/Rail.tsx) ------------------------
+   Narrower than the panel it came from, so the feed is capped and scrolls inside
+   itself rather than pushing the nested questions off the bottom of the rail. */
+.rail-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rail-working-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 9.5px var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--accent);
+}
+.rail-feed { max-height: 208px; overflow-y: auto; margin-top: 2px; }
+.rail-feed .feed-row { font-size: 11px; }
+.rail-feed .feed-empty { font-size: 11px; }
+
+
+/* --- the crew, condensed ----------------------------------------------------
+   Four labelled rows of 104px cells ran nearly as tall as the graph. The label
+   sits inline with its spheres now, the cells and orbs are smaller, and the
+   domains flow in columns when there is room — the same information, about a
+   third of the height. */
+.fleet-board .fleet-tally { gap: 16px; padding-bottom: 9px; font-size: 12px; }
+.fleet-board .fleet-tally b { font-size: 13.5px; }
+.fleet-domains-flow { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.fleet-board .enquiry-line { margin-top: 0; display: grid; grid-template-columns: 92px 1fr; gap: 10px; align-items: start; }
+.fleet-board .enquiry-head { margin-bottom: 0; flex-wrap: wrap; row-gap: 1px; padding-top: 6px; }
+.fleet-board .enquiry-head .nm { font-size: 9px; letter-spacing: 0.12em; }
+.fleet-board .enquiry-head .n { font-size: 9.5px; width: 100%; padding-left: 15px; }
+.fleet-board .spheres { gap: 9px; }
+.fleet-board .sphere { width: 72px; gap: 2px; }
+.fleet-board .sphere .orb { width: calc(24px * var(--scale, 1)); height: calc(24px * var(--scale, 1)); }
+.fleet-board .sphere.idle .orb { width: 15px; height: 15px; }
+.fleet-board .sphere-name { font-size: 9.5px; line-height: 1.15; }
+.fleet-board .sphere-n { font-size: 9px; }
+.fleet-board .fleet-foot { margin-top: 10px; font-size: 11.5px; }

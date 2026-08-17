@@ -12,7 +12,7 @@ import { VitalsCharts } from "./components/VitalsCharts";
 import { NestedQuestions } from "./components/NestedQuestions";
 import { GeminiObject } from "./components/GeminiObject";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
-import { Feed, Panel, Readout, Ring, RingLegend } from "./components/Hud";
+import { Panel, Readout, Ring, RingLegend } from "./components/Hud";
 import { Note, VoiceLine, cascade, proofState, useCursorGlow } from "@/lib/alive";
 
 /* The board.
@@ -157,7 +157,9 @@ export default function Board() {
           was the smallest thing on the board. */}
       <KnowledgeGraph running={running} />
 
-      {/* The wall: what holds up, and what it is doing right now. */}
+      {/* The wall: what holds up. Live activity moved to the rail, beside the
+          questions it is activity on, so this is a single full-width column and
+          the distribution charts can sit side by side in it. */}
       <div className="wall">
         <Panel title="How the research is holding up" className="vitals">
           <div className="ring-row">
@@ -196,13 +198,6 @@ export default function Board() {
           </p>
         </Panel>
 
-        <Panel
-          title="Live activity"
-          meta={running ? <span className="hp-live">working</span> : <span className="hp-idle">idle</span>}
-          className="activity"
-        >
-          <Feed events={events} />
-        </Panel>
       </div>
 
       {missions.length > 0 && (

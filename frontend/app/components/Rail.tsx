@@ -9,12 +9,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ACTIVE_STATUSES, MissionSummary, NestedQuestion, getNestedQuestions, listMissions } from "@/lib/api";
+import {
+  ACTIVE_STATUSES, EventRecord, MissionSummary, NestedQuestion,
+  getEvents, getNestedQuestions, listMissions,
+} from "@/lib/api";
+import { Feed } from "./Hud";
 import { Rolling } from "@/lib/alive";
 
 export function Rail() {
   const [missions, setMissions] = useState<MissionSummary[]>([]);
   const [nested, setNested] = useState<NestedQuestion[]>([]);
+  const [events, setEvents] = useState<EventRecord[]>([]);
   const path = usePathname();
 
   useEffect(() => {
@@ -23,6 +28,9 @@ export function Rail() {
       // Read from the graph, not from missions carrying raised_by: a question is
       // recorded when it is raised, and only some are dispatched as missions.
       getNestedQuestions(40).then(setNested).catch(() => {});
+      // Live activity belongs beside the questions it is activity on, not in a
+      // column of its own across the board.
+      getEvents(60).then(setEvents).catch(() => {});
     };
     load();
     const timer = setInterval(load, 2000);
@@ -62,15 +70,20 @@ export function Rail() {
         ))}
       </div>
 
-      {open > 0 && (
-        <div className="rail-block">
-          <div className="rail-head">working</div>
-          <div className="rail-working">
-            <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
-            {open} question{open === 1 ? "" : "s"} in flight
-          </div>
+      <div className="rail-block">
+        <div className="rail-head">
+          live activity
+          {open > 0 && (
+            <span className="rail-working-tag">
+              <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
+              {open} in flight
+            </span>
+          )}
         </div>
-      )}
+        <div className="rail-feed">
+          <Feed events={events} />
+        </div>
+      </div>
 
       {/* Nested questions, not a second copy of the question list. The rail
           used to repeat the eight most recent answers, which the board already
