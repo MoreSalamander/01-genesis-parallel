@@ -104,6 +104,14 @@ class LocalGraphStore:
         self.entities_path.write_text(json.dumps(entities, indent=2, ensure_ascii=False), encoding="utf-8")
         return sorted(touched)
 
+    def relate(self, src_kind: str, src: str, rel: str, dst_kind: str, dst: str, mission_id: str) -> None:
+        """Record one provenance link from outside the ingest path.
+
+        The follow-up loop uses this to record that an objective raised a gap,
+        so the context graph can show why the search went where it did.
+        """
+        self._relate(src_kind, src, rel, dst_kind, dst, mission_id)
+
     def _relate(self, src_kind: str, src: str, rel: str, dst_kind: str, dst: str, mission_id: str) -> None:
         self.relationships_path.parent.mkdir(parents=True, exist_ok=True)
         with self.relationships_path.open("a", encoding="utf-8") as fh:

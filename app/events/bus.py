@@ -20,6 +20,10 @@ EVENT_NAMES = {
     "recommendation.created",
     "intelligence.completed",
     "intelligence.incomplete",
+    # The answer named something it did not have, and the system went back out
+    # for it. Recorded so a follow-up round is visible as a deliberate step
+    # rather than as unexplained extra searching.
+    "intelligence.gap_found",
     "authorization.decided",
 }
 

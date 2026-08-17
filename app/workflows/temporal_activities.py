@@ -16,6 +16,12 @@ def _runtime():
 
 
 def _load(mission_id: str) -> Mission:
+    # Tag model calls with the run that caused them. Every activity loads the
+    # mission first, so this covers the whole Temporal path — the one that
+    # actually runs, and the one that bypasses run_mission() entirely.
+    from app import cognition_ledger
+
+    cognition_ledger.set_ref(mission_id)
     mission = _runtime().working.get(mission_id)
     if mission is None:
         raise RuntimeError(f"mission {mission_id} not found in durable state")
@@ -59,6 +65,16 @@ def synthesize_activity(mission_id: str) -> str:
     return _stage(mission_id, "_synthesize")
 
 
+@activity.defn(name="signal.deepen")
+def deepen_activity(mission_id: str) -> str:
+    """Audit the answer against the objective and, if it falls short, research
+    the shortfall and re-synthesize. Its own durable step because it can run
+    several rounds of retrieval and must be retried and checkpointed like any
+    other stage — and because the executive's run() convenience path is not
+    what executes in production."""
+    return _stage(mission_id, "_deepen")
+
+
 @activity.defn(name="signal.complete")
 def complete_activity(mission_id: str) -> str:
     return _stage(mission_id, "complete")
@@ -75,5 +91,5 @@ def incomplete_activity(mission_id: str, reason: str) -> str:
 
 ALL_ACTIVITIES = [
     plan_activity, research_activity, verify_activity, knowledge_activity,
-    synthesize_activity, complete_activity, incomplete_activity,
+    synthesize_activity, deepen_activity, complete_activity, incomplete_activity,
 ]

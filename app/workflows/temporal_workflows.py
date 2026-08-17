@@ -23,6 +23,7 @@ class MissionWorkflow:
             await workflow.execute_activity("signal.verify", mission_id, **_OPTS)
             await workflow.execute_activity("signal.knowledge", mission_id, **_OPTS)
             await workflow.execute_activity("signal.synthesize", mission_id, **_OPTS)
+            await workflow.execute_activity("signal.deepen", mission_id, **_OPTS)
             return await workflow.execute_activity("signal.complete", mission_id, **_OPTS)
         except ActivityError as err:
             return await workflow.execute_activity(

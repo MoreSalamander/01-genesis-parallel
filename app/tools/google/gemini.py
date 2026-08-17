@@ -38,6 +38,26 @@ ROLE_PROMPTS: dict[str, str] = {
         "\"contradiction\": bool, \"contradiction_detail\": str}]}. Claims from different source URLs "
         "in the same group corroborate each other. Preserve disagreements; never pick a winner."
     ),
+    # Does the answer actually answer the question? A recommendation that
+    # prioritises "verified high-CPM niches" while holding one disputed CPM
+    # figure has named its own missing input and stopped — which is a plan to
+    # find out, not a finding. This role exists to catch that, and its output
+    # drives another research round.
+    "sufficiency_check": (
+        "You are the Sufficiency Auditor for a film studio's Signal Intelligence system. "
+        "You are given the original objective and the answer assembled for it. Decide whether "
+        "the answer FULFILS the objective as literally asked. Be strict and concrete:\n"
+        "- If the objective asks for a number of specific items (e.g. 'top 10 ideas'), an answer "
+        "that describes the category without listing them is NOT fulfilled.\n"
+        "- If the answer recommends acting on data it does not actually contain, or cites a "
+        "criterion it has not measured, that is an unmet dependency and NOT fulfilled.\n"
+        "- If the answer is a process for finding the answer rather than the answer, it is NOT "
+        "fulfilled.\n"
+        "Return JSON: {\"fulfilled\": bool, \"reason\": str, \"gaps\": [{\"question\": str, "
+        "\"why\": str}]}. Each gap question must be a self-contained research question that, if "
+        "answered, closes the shortfall. Return at most 4 gaps, ordered by how much they block "
+        "the objective. If fulfilled is true, gaps must be empty."
+    ),
     "strategic_assessment": (
         "You are Strategic Cognition for a film studio ('Convergence Studios'). Given verified/unverified/"
         "conflicted claims about external entities, produce findings and one recommendation for the Studio "
@@ -68,30 +88,66 @@ class GeminiCognition:
         self._model = settings.gemini_model
 
     def generate_json(self, role: str, payload: dict[str, Any]) -> dict[str, Any]:
+        import time
+
+        from app import cognition_ledger
         from app.observability.tracing import span
 
         prompt = ROLE_PROMPTS[role] + "\n\nINPUT:\n" + json.dumps(payload, ensure_ascii=False)
-        with span("gemini.generate", role=role, model=self._model) as sp:
-            response = self._client.models.generate_content(
-                model=self._model,
-                contents=prompt,
-                config={"response_mime_type": "application/json", "temperature": 0.2},
+        started = time.monotonic()
+        tokens: dict[str, int] = {}
+        try:
+            with span("gemini.generate", role=role, model=self._model) as sp:
+                response = self._client.models.generate_content(
+                    model=self._model,
+                    contents=prompt,
+                    config={"response_mime_type": "application/json", "temperature": 0.2},
+                )
+                usage = getattr(response, "usage_metadata", None)
+                if usage is not None:
+                    tokens = {
+                        "prompt": getattr(usage, "prompt_token_count", 0) or 0,
+                        "total": getattr(usage, "total_token_count", 0) or 0,
+                    }
+                if sp is not None and tokens:
+                    sp.set_attribute("tokens.prompt", tokens["prompt"])
+                    sp.set_attribute("tokens.total", tokens["total"])
+        except Exception as err:
+            # A failed call is part of the reasoning record. Dropping it would
+            # leave the console showing an unbroken run of successes.
+            cognition_ledger.record(
+                role=role, model=self._model, live=True, prompt=prompt, raw="",
+                ms=int((time.monotonic() - started) * 1000), parsed_ok=False,
+                tokens=tokens, error=f"{type(err).__name__}: {err}",
             )
-            usage = getattr(response, "usage_metadata", None)
-            if sp is not None and usage is not None:
-                sp.set_attribute("tokens.prompt", getattr(usage, "prompt_token_count", 0) or 0)
-                sp.set_attribute("tokens.total", getattr(usage, "total_token_count", 0) or 0)
+            raise
         # First-hand proof of Google Cloud usage: the call came back.
         runtime_proof.record("gemini", "LIVE",
                              f"{self._model} returned a response this session")
         text = response.text or ""
+        ms = int((time.monotonic() - started) * 1000)
+
+        # Record the exact prompt and the exact reply, before parsing. The
+        # console renders the reasoning from this, so it has to be what was
+        # really sent and really returned — not a retelling of the parsed result.
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
         except json.JSONDecodeError:
             match = re.search(r"\{.*\}", text, re.DOTALL)
             if match:
-                return json.loads(match.group(0))
-            raise
+                parsed = json.loads(match.group(0))
+            else:
+                cognition_ledger.record(
+                    role=role, model=self._model, live=True, prompt=prompt, raw=text,
+                    ms=ms, parsed_ok=False, tokens=tokens,
+                    error="response was not JSON and contained no JSON object",
+                )
+                raise
+        cognition_ledger.record(
+            role=role, model=self._model, live=True, prompt=prompt, raw=text,
+            ms=ms, parsed_ok=True, tokens=tokens,
+        )
+        return parsed
 
 
 class MockCognition:
@@ -100,10 +156,25 @@ class MockCognition:
     live = False
 
     def generate_json(self, role: str, payload: dict[str, Any]) -> dict[str, Any]:
+        import time
+
+        from app import cognition_ledger
+
         handler = getattr(self, f"_{role}", None)
         if handler is None:
             raise ValueError(f"MockCognition has no handler for role '{role}'")
-        return handler(payload)
+        started = time.monotonic()
+        result = handler(payload)
+        # Recorded too, and flagged live=False: fixture output must never
+        # appear under a model's name.
+        cognition_ledger.record(
+            role=role, model="fixture (no model called)", live=False,
+            prompt=ROLE_PROMPTS.get(role, "") + "\n\nINPUT:\n"
+                   + json.dumps(payload, ensure_ascii=False, default=str),
+            raw=json.dumps(result, ensure_ascii=False, default=str),
+            ms=int((time.monotonic() - started) * 1000), parsed_ok=True,
+        )
+        return result
 
     # -- research_plan ------------------------------------------------------
     def _research_plan(self, payload: dict) -> dict:
@@ -191,6 +262,63 @@ class MockCognition:
         return re.sub(r"[^a-z]+", "-", lowered)[:32]
 
     # -- strategic_assessment ---------------------------------------------------
+    def _sufficiency_check(self, payload: dict) -> dict:
+        """Deterministic stand-in for the auditor.
+
+        It cannot read intent, so it checks the two shortfalls that are
+        decidable from structure alone: an objective that asks for N items
+        against an answer that lists none, and a recommendation that leans on a
+        criterion nothing verified measured. Anything subtler is left to the
+        model — this returns fulfilled rather than inventing a gap.
+        """
+        import re
+
+        objective = str(payload.get("objective", ""))
+        answer = str(payload.get("recommendation", "")) + " " + " ".join(
+            str(f) for f in payload.get("findings", []))
+        verified = [str(c) for c in payload.get("verified_claims", [])]
+        gaps = []
+
+        wanted = re.search(r"\btop\s+(\d+)|\b(\d+)\s+(?:ideas|examples|options|ways)", objective, re.I)
+        if wanted:
+            n = int(next(g for g in wanted.groups() if g))
+            # Does the answer actually enumerate anything?
+            listed = len(re.findall(r"(?m)^\s*(?:\d+[.)]|[-*])\s+", answer))
+            if listed < n:
+                gaps.append({
+                    "question": f"What are {n} specific, named options for: {objective.strip()}?",
+                    "why": f"the objective asks for {n} items and the answer enumerates {listed}",
+                })
+
+        # Grouped, because these are the same claim wearing different words: an
+        # answer that measured "cost" has not failed to measure "budget", and
+        # flagging that would manufacture work rather than find a real gap.
+        criteria = {
+            "CPM": ("cpm",),
+            "competition": ("competition", "competitor", "saturation"),
+            "cost": ("cost", "budget", "price", "spend"),
+            "revenue": ("revenue", "earnings", "income", "monetis", "monetiz"),
+        }
+        lowered_answer = answer.lower()
+        lowered_claims = " ".join(verified).lower()
+        for label, terms in criteria.items():
+            if not any(t in lowered_answer for t in terms):
+                continue
+            if any(t in lowered_claims for t in terms):
+                continue
+            gaps.append({
+                "question": f"What are the actual {label} figures relevant to: {objective.strip()}?",
+                "why": f"the answer prioritises by {label} but no verified claim measures it",
+            })
+            break
+
+        return {
+            "fulfilled": not gaps,
+            "reason": ("The answer addresses the objective as asked." if not gaps
+                       else "The answer names inputs it does not supply."),
+            "gaps": gaps[:4],
+        }
+
     def _strategic_assessment(self, payload: dict) -> dict:
         claims = payload.get("claims", [])
         verified = [i for i, c in enumerate(claims) if c.get("status") == "VERIFIED"]

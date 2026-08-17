@@ -157,3 +157,24 @@ def events(limit: int = 100) -> list[dict]:
 @router.get("/memory/episodic")
 def episodic(limit: int = 50) -> list[dict]:
     return get_runtime().episodic.list(limit)
+
+
+# --- the reasoning itself -------------------------------------------------
+# What the model was asked and what it said, recorded at the moment of the call
+# (app/cognition_ledger.py). Summaries for the list, full text per call.
+
+@router.get("/cognition")
+def cognition(limit: int = 40, ref: str = "") -> list[dict]:
+    from app import cognition_ledger
+
+    return cognition_ledger.tail(limit=limit, ref=ref or None)
+
+
+@router.get("/cognition/{cog_id}")
+def cognition_detail(cog_id: str) -> dict:
+    from app import cognition_ledger
+
+    entry = cognition_ledger.get(cog_id)
+    if entry is None:
+        raise HTTPException(404, "no such model call")
+    return entry
