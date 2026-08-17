@@ -504,14 +504,22 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
 
         ctx.beginPath();
         ctx.arc(n.sx!, n.sy!, n.sr!, 0, Math.PI * 2);
-        // Solid only while it is part of the fan the sequence is holding.
-        ctx.fillStyle = inConnection ? edgeInk : colour;
-        ctx.globalAlpha = inConnection ? 1 : (on ? 0.5 : 0.26) * depth;
+        /* Amber is always solid amber. A disputed entity is the one thing here a
+           Studio Head cannot act on without deciding something, so it is never
+           faint, never depth-faded, and it keeps its own colour even inside a
+           connection — which takes precedence over the connection colouring,
+           deliberately: what is contested must not become ambiguous because it
+           happens to be part of what is being shown.
+
+           Everything else is transparent, and fills solid in the connection's
+           colour only while it is part of the fan the sequence is holding. */
+        ctx.fillStyle = n.disputed ? warn : inConnection ? edgeInk : colour;
+        ctx.globalAlpha = n.disputed || inConnection ? 1 : (on ? 0.5 : 0.26) * depth;
         ctx.fill();
         // The ring carries the node's own colour — amber still means disputed
         // while the fill is showing the connection — at the node's own transparency.
         ctx.strokeStyle = colour;
-        ctx.globalAlpha = inConnection ? 1 : (on ? 0.85 : 0.5) * depth;
+        ctx.globalAlpha = n.disputed || inConnection ? 1 : (on ? 0.85 : 0.5) * depth;
         ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
         ctx.stroke();
         if (on) {                                   // selection ring
