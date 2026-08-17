@@ -60,10 +60,11 @@ export interface Forces {
      "this node is held here", a connection says "one question learned about both
      of these". They are coloured separately because they mean separately. */
   edgeColour: string;
+  edgeWidth: number;   // and how thick
 }
 export const DEFAULT_FORCES: Forces = {
   wire: 250, pull: 0.05, push: 1500, spacing: 90,
-  glow: 0.16, colour: "#c0c6d4", edgeColour: "#3987e5",
+  glow: 0.16, colour: "#c0c6d4", edgeColour: "#3987e5", edgeWidth: 1,
 };
 
 /* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
@@ -282,7 +283,10 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     try { localStorage.setItem(FORCES_KEY, JSON.stringify(forcesRef.current)); } catch { /* ignore */ }
     // A repaint is enough for a paint-only setting; the rest need the model to
     // move, and stepping when nothing has to move would jog a settled layout.
-    if (key === "glow" || key === "colour" || key === "edgeColour") { drawRef.current?.(); return; }
+    if (key === "glow" || key === "colour" || key === "edgeColour" || key === "edgeWidth") {
+      drawRef.current?.();
+      return;
+    }
     // Settle and repaint on the spot rather than waiting for the animation loop.
     // The loop is not always there: reduced motion has none at all, and a
     // background tab has requestAnimationFrame suspended — in both cases the
@@ -424,10 +428,14 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       // only showed on the dim ones would barely be a choice, and the lit state is
       // where connections are actually read — during a cycle, or on hover.
       const edgeInk = forcesRef.current.edgeColour || accent;
+      const edgeW = forcesRef.current.edgeWidth ?? 1;
       for (const { a: i, b: j } of edges) {
         const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
         ctx.strokeStyle = edgeInk;
-        ctx.lineWidth = lit ? 1.6 : 1;
+        // Lit stays proportionally heavier than unlit, so raising the thickness
+        // does not flatten the distinction between a connection you are looking at
+        // and the eight thousand you are not.
+        ctx.lineWidth = edgeW * (lit ? 1.6 : 1);
         const dim = Math.min(fade(nodes[i]), fade(nodes[j]));
         ctx.globalAlpha = (focus === null ? 0.38 : lit ? 0.9 : 0.14) * dim;
         ctx.beginPath();
@@ -463,10 +471,21 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         ctx.globalAlpha = 1;
         ctx.fillStyle = panel;
         ctx.fill();
-        ctx.fillStyle = colour;
+        /* In the connection: filled solid in the connection's own colour, so the
+           fan reads as one system — the lines and the nodes they touch are the
+           same thing being shown.
+
+           Out of it: its own colour at 26%, over the opaque backing above, so it
+           stays itself rather than taking the tint of whatever is behind it. Both
+           halves are deliberate and they are different halves. */
+        ctx.fillStyle = inConnection ? edgeInk : colour;
         ctx.globalAlpha = inConnection ? 1 : on ? 0.5 : 0.26;
         ctx.fill();
         ctx.globalAlpha = 1;
+        /* The ring stays the node's own colour even when the fill does not, so
+           amber still means disputed while it is part of a fan. The fill answers
+           "is this in what I am looking at", the ring answers "is this contested",
+           and neither question should cost the other its answer. */
         ctx.strokeStyle = colour;
         ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
         ctx.stroke();
@@ -735,6 +754,11 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               <span>connections<b>{forces.edgeColour}</b></span>
               <input type="color" value={forces.edgeColour}
                      onChange={(e) => setForce("edgeColour", e.target.value)} />
+            </label>
+            <label>
+              <span>connection thickness<b>{forces.edgeWidth.toFixed(1)}</b></span>
+              <input type="range" min={0.4} max={4} step={0.2} value={forces.edgeWidth}
+                     onChange={(e) => setForce("edgeWidth", Number(e.target.value))} />
             </label>
             <button className={`gf-tour${touring ? " on" : ""}`}
                     onClick={() => setTouring((t) => !t)}
