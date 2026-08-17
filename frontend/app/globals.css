@@ -1077,3 +1077,49 @@ td.num { font-variant-numeric: tabular-nums; }
   .chain-3d .chain-step:hover,
   .chain-3d .chain-step:focus-within { transform: none; transition: none; }
 }
+
+
+/* --- folding the entity list away (components/KnowledgeGraph.tsx) -----------
+   Folded, the sidebar's 300px goes to the canvas — which is the whole point, so
+   the grid collapses to one column rather than leaving a gap where the list was.
+   The toggle sits over the panel's top-right, out of the graph's way. */
+.graph-layout { position: relative; }
+.graph-layout.list-folded { grid-template-columns: minmax(0, 1fr); }
+
+.graph-list-toggle {
+  position: absolute; top: -34px; right: 0; z-index: 2;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 9px; cursor: pointer;
+  font: 10.5px var(--mono); letter-spacing: 0.04em; color: var(--muted);
+}
+.graph-list-toggle:hover { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.graph-list-toggle .caret { font-size: 12px; line-height: 1; }
+/* The control stays at every width. Hiding it on narrow screens left a trap:
+   fold on a wide window, narrow it, and the list was gone with no way back. */
+
+
+/* --- the entity index, folded away (components/KnowledgeGraph.tsx) ----------
+   The exhaustive list of everything tracked. At 472 entries it ran further down
+   the page than the graph, its legend and the sidebar combined, so it starts
+   folded and says how many it holds before you open it. */
+.graph-nodes-toggle {
+  display: flex; align-items: center; gap: 7px; margin-top: 14px;
+  background: none; border: 0; padding: 4px 0; cursor: pointer;
+  font: 10.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+}
+.graph-nodes-toggle:hover { color: var(--accent); }
+.graph-nodes-toggle .caret { font-size: 9px; line-height: 1; }
+/* `.graph-nodes` sets display: flex, which beats the UA stylesheet's [hidden]
+   rule — so the folded index stayed 320px tall and the fold did nothing to the
+   page. Any component that folds with the hidden attribute needs this whenever
+   its own class sets a display. */
+.graph-nodes[hidden] { display: none; }
+
+/* Open, it is still bounded: a scroll region rather than an endless page. */
+.graph-nodes[id="graph-node-index"] {
+  max-height: 320px; overflow-y: auto; margin-top: 8px;
+  padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}

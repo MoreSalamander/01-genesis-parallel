@@ -180,6 +180,41 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
   const [dragging, setDragging] = useState(false);
+  // The list can be folded away to give the graph the whole panel. Read after
+  // mount rather than during render: reading localStorage while rendering makes
+  // the server and client disagree about the first paint, and React refuses to
+  // patch that tree.
+  const [listOpen, setListOpen] = useState(true);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("genesis.graph.list");
+      if (stored !== null) setListOpen(stored === "1");
+    } catch { /* private mode — the default stands */ }
+  }, []);
+  // Two folds, remembered separately: the sidebar is how you read one entity,
+  // the index is the whole cast at once, and wanting one is not wanting the other.
+  const [nodesOpen, setNodesOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("genesis.graph.nodes");
+      if (stored !== null) setNodesOpen(stored === "1");
+    } catch { /* private mode — folded is the default */ }
+  }, []);
+  const toggleNodes = () => {
+    setNodesOpen((open) => {
+      const next = !open;
+      try { localStorage.setItem("genesis.graph.nodes", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const toggleList = () => {
+    setListOpen((open) => {
+      const next = !open;
+      try { localStorage.setItem("genesis.graph.list", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -400,7 +435,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         </span>
       </h2>
 
-      <div className="graph-layout">
+      <div className={`graph-layout${listOpen ? "" : " list-folded"}`}>
         <div className="graph-wrap">
           <Reticle running={running}>
             <canvas
@@ -435,7 +470,20 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
           </p>
         </div>
 
-        <aside className="graph-detail">
+        <button
+          className="graph-list-toggle"
+          onClick={toggleList}
+          aria-expanded={listOpen}
+          aria-controls="graph-entity-list"
+          title={listOpen
+            ? "Fold the list away and give the graph the whole panel"
+            : "Show the list of everything the studio tracks"}
+        >
+          <span className="caret" aria-hidden="true">{listOpen ? "›" : "‹"}</span>
+          {listOpen ? "hide list" : `list · ${names.length}`}
+        </button>
+
+        <aside className="graph-detail" id="graph-entity-list" hidden={!listOpen}>
           {entity ? (
             <>
               <div className="gd-head">
@@ -475,7 +523,24 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         </aside>
       </div>
 
-      <div className="graph-nodes">
+      {/* Four hundred and seventy-two chips ran further down the page than the
+          graph, the legend and the sidebar combined — a wall you scroll past
+          rather than a list you use. It folds, and starts folded: the graph and
+          the sidebar are how you get at an entity, and this is the exhaustive
+          index for when you want to see everything at once. */}
+      <button
+        className="graph-nodes-toggle"
+        onClick={toggleNodes}
+        aria-expanded={nodesOpen}
+        aria-controls="graph-node-index"
+      >
+        <span className="caret" aria-hidden="true">{nodesOpen ? "▾" : "▸"}</span>
+        {nodesOpen
+          ? `hide all ${names.length}`
+          : `show all ${names.length} companies and people`}
+      </button>
+
+      <div className="graph-nodes" id="graph-node-index" hidden={!nodesOpen}>
         {names.map((name) => {
           const disputed = (entities[name].assertions ?? []).some((a) => a.disputed);
           return (
