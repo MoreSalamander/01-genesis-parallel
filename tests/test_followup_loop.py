@@ -99,3 +99,80 @@ def test_deepen_runs_as_its_own_durable_step():
     assert '"signal.deepen"' in source, "the workflow never calls deepen"
     assert source.index('"signal.deepen"') < source.index('"signal.complete"'), \
         "deepening must happen before the mission is closed"
+
+
+# --- the graph half: where the chain runs out --------------------------------
+# These need no model at all. That is the point: a missing edge is checkable,
+# and unlike a model grading its own work it cannot fail in the flattering
+# direction.
+
+from app.knowledge import coverage  # noqa: E402
+from app.models.evidence import (  # noqa: E402
+    Claim, Domain, Finding, Mission, Recommendation, StrategicImpact, VerificationStatus,
+)
+
+
+def _mission_with(claims, findings, recommendation=None) -> Mission:
+    m = Mission(objective="test")
+    m.claims = claims
+    m.findings = findings
+    m.recommendation = recommendation
+    return m
+
+
+def test_a_finding_resting_on_nothing_verified_is_a_located_hole():
+    claim = Claim(text="unconfirmed thing", entity="X",
+                  status=VerificationStatus.UNVERIFIED, corroborating_sources=1)
+    finding = Finding(domain=Domain.MARKET, text="Act on the unconfirmed thing",
+                      claim_ids=[claim.id], strategic_impact=StrategicImpact.HIGH)
+    cov = coverage.assess(_mission_with([claim], [finding]))
+
+    assert not cov.filled
+    hole = next(h for h in cov.holes if h.kind == "unsupported_finding")
+    # Located, not vague: it names the node that is short.
+    assert hole.where == finding.id
+    assert "Act on the unconfirmed thing" in hole.as_question()
+
+
+def test_a_verified_chain_reports_filled():
+    claim = Claim(text="confirmed thing", entity="X",
+                  status=VerificationStatus.VERIFIED, corroborating_sources=3)
+    finding = Finding(domain=Domain.MARKET, text="Act on the confirmed thing",
+                      claim_ids=[claim.id], strategic_impact=StrategicImpact.HIGH)
+    rec = Recommendation(mission_id="m", action="do it", rationale="because",
+                         confidence=0.8, finding_ids=[finding.id])
+    cov = coverage.assess(_mission_with([claim], [finding], rec))
+
+    assert cov.filled, [h.detail for h in cov.holes]
+    assert cov.findings_supported == 1
+
+
+def test_a_high_impact_finding_on_one_source_is_flagged_as_thin():
+    claim = Claim(text="only one page said this", entity="X",
+                  status=VerificationStatus.VERIFIED, corroborating_sources=1)
+    finding = Finding(domain=Domain.MARKET, text="Bet the studio on it",
+                      claim_ids=[claim.id], strategic_impact=StrategicImpact.HIGH)
+    cov = coverage.assess(_mission_with([claim], [finding]))
+
+    assert any(h.kind == "thin_claim" and h.where == claim.id for h in cov.holes)
+
+
+def test_a_recommendation_citing_no_findings_is_a_hole():
+    rec = Recommendation(mission_id="m", action="do something", rationale="",
+                         confidence=0.5, finding_ids=[])
+    cov = coverage.assess(_mission_with([], [], rec))
+
+    assert any(h.kind == "unsupported_recommendation" for h in cov.holes)
+
+
+def test_the_graph_records_the_link_the_audit_walks():
+    """coverage.assess reads finding.claim_ids, and the store must write that
+    same link as an edge — otherwise the console's graph and the audit disagree
+    about what supports what."""
+    import inspect
+
+    from app.knowledge import store
+
+    src = inspect.getsource(store)
+    assert '"finding", finding.id, "rests on", "claim"' in src, \
+        "finding→claim edge missing: the provenance chain stays in two halves"

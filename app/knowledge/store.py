@@ -97,6 +97,15 @@ class LocalGraphStore:
             self._relate("source", evidence.source_id, "produced", "evidence", evidence.id, mission.id)
         for finding in mission.findings:
             self._relate("objective", mission.id, "generated", "finding", finding.id, mission.id)
+            # The half of the chain that was missing. Without this the graph
+            # held two disconnected halves — source→evidence→claim→entity, and
+            # objective→finding→recommendation — with no path between them, so
+            # it could not answer "what evidence is under this recommendation?"
+            # That is the question this system exists to answer, and it is also
+            # what makes a shortfall locatable: a finding with no verified claim
+            # beneath it is a hole in a specific place, not a general doubt.
+            for claim_id in finding.claim_ids:
+                self._relate("finding", finding.id, "rests on", "claim", claim_id, mission.id)
             if mission.recommendation:
                 self._relate("finding", finding.id, "supports", "recommendation", mission.recommendation.id, mission.id)
 

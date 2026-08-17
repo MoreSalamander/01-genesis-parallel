@@ -202,14 +202,52 @@ class SignalIntelligenceExecutive:
     MAX_ROUNDS = 3
 
     def _deepen(self, mission: Mission) -> None:
+        from app.knowledge import coverage
+
         for round_no in range(2, self.MAX_ROUNDS + 1):
+            # Two different questions, asked of two different things.
+            #
+            # The graph is walked, not consulted: a finding with no verified
+            # claim beneath it is a missing edge, and it says exactly which
+            # node is short. That is checkable, and it cannot flatter itself.
+            #
+            # The model is asked what the graph cannot know — whether the
+            # answer meant what the objective asked. A graph cannot notice that
+            # "top 10" wanted ten of something.
+            #
+            # Neither alone is enough, so the loop runs on both, and stops only
+            # when the structure holds *and* the objective is met.
+            cov = coverage.assess(mission)
             verdict = self._assess_sufficiency(mission)
-            if verdict is None:
-                return                      # auditor unavailable — say nothing, change nothing
-            if verdict.get("fulfilled"):
-                mission.stage("SUFFICIENT", verdict.get("reason", "The answer addresses the objective."))
+
+            if verdict is None and cov.filled:
+                mission.stage("COVERAGE OK", f"Audit unavailable, but the chain holds: {cov.summary()}")
                 return
-            gaps = [g for g in (verdict.get("gaps") or []) if g.get("question")][:4]
+            if verdict is not None and verdict.get("fulfilled") and cov.filled:
+                mission.stage(
+                    "SUFFICIENT",
+                    f"{verdict.get('reason', 'The answer addresses the objective.')} {cov.summary()}.",
+                )
+                return
+
+            # Structural holes first: they name the node that is short, so the
+            # follow-up question is about a specific weak point rather than the
+            # objective at large.
+            gaps: list[dict] = [
+                {"question": hole.as_question(), "why": hole.detail, "where": hole.where}
+                for hole in cov.holes[:3]
+            ]
+            if cov.holes:
+                mission.stage(
+                    "THIN SUPPORT",
+                    f"{len(cov.holes)} place{'' if len(cov.holes) == 1 else 's'} where the chain "
+                    f"runs out — {cov.holes[0].detail}",
+                )
+            seen_questions = {g["question"] for g in gaps}
+            for g in (verdict or {}).get("gaps") or []:
+                if g.get("question") and g["question"] not in seen_questions:
+                    gaps.append(g)
+            gaps = gaps[:4]
             if not gaps:
                 # Not fulfilled, but nothing actionable was named. Returning in
                 # silence here left no trace that the audit had happened at all,
@@ -217,19 +255,19 @@ class SignalIntelligenceExecutive:
                 # ran. Say what the audit found and stop.
                 mission.stage(
                     "SHORTFALL NOTED",
-                    f"{verdict.get('reason', 'The answer falls short of the objective.')} "
+                    f"{(verdict or {}).get('reason', 'The answer falls short of the objective.')} "
                     "No researchable follow-up was identified, so nothing further was attempted.",
                 )
                 return
 
             mission.stage(
                 "GAPS FOUND",
-                f"{verdict.get('reason', 'The answer is incomplete.')} "
+                f"{(verdict or {}).get('reason', 'The answer is incomplete.')} "
                 f"Following up on {len(gaps)}: " + "; ".join(g["question"][:70] for g in gaps),
             )
             self.bus.emit(
                 "intelligence.gap_found", mission_id=mission.id, round=round_no,
-                reason=verdict.get("reason", ""),
+                reason=(verdict or {}).get("reason", ""),
                 questions=[g["question"] for g in gaps],
             )
             # Provenance: the follow-up is part of this objective's tree, and
