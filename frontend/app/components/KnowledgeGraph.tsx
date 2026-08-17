@@ -17,25 +17,52 @@ import { useReducedMotion } from "@/lib/alive";
 import { Reticle } from "./Hud";
 
 interface Node {
-  id: string; x: number; y: number; vx: number; vy: number;
+  id: string; x: number; y: number; z: number;
+  vx: number; vy: number; vz: number;
   r: number; disputed: boolean; claims: number;
-  bx?: number; by?: number; phase?: number;   // settled position + drift offset
+  bx?: number; by?: number; bz?: number; phase?: number;   // settled position + drift
+  sx?: number; sy?: number; sr?: number; depth?: number;   // last projection
 }
 
 const W = 720;
 const H = 340;
 const TICKS = 260;
+const DEPTH = 300;          // how far back the far wall sits
+const FOCAL = 620;          // perspective strength: larger is flatter
+
+/* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
+   perspective divide is what makes depth legible at all — without it a rotating
+   graph is just a graph that wobbles. `k` is the scale at that depth, so a node's
+   radius, its edges and its hit target all shrink together and stay consistent. */
+function project(n: Node, yaw: number, pitch: number) {
+  const dx = n.x - W / 2, dy = n.y - H / 2, dz = n.z;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const x1 = dx * cy - dz * sy;
+  const z1 = dx * sy + dz * cy;
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const y1 = dy * cp - z1 * sp;
+  const z2 = dy * sp + z1 * cp;
+  const k = FOCAL / (FOCAL + z2);
+  return { sx: W / 2 + x1 * k, sy: H / 2 + y1 * k, k, z: z2 };
+}
 
 function build(entities: Record<string, KnowledgeEntity>) {
   const names = Object.keys(entities);
   const nodes: Node[] = names.map((name, i) => {
     const assertions = entities[name].assertions ?? [];
-    const angle = (i / Math.max(1, names.length)) * Math.PI * 2;
+    // Seeded on a sphere rather than a ring — a Fibonacci lattice, so the
+    // starting shell is even and the simulation is not fighting a seam.
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const t = names.length > 1 ? i / (names.length - 1) : 0.5;
+    const yUnit = 1 - t * 2;
+    const ring = Math.sqrt(Math.max(0, 1 - yUnit * yUnit));
+    const theta = golden * i;
     return {
       id: name,
-      x: W / 2 + Math.cos(angle) * 120,
-      y: H / 2 + Math.sin(angle) * 90,
-      vx: 0, vy: 0,
+      x: W / 2 + Math.cos(theta) * ring * 120,
+      y: H / 2 + yUnit * 90,
+      z: Math.sin(theta) * ring * DEPTH * 0.5,
+      vx: 0, vy: 0, vz: 0,
       claims: assertions.length,
       r: Math.min(18, 7 + assertions.length * 1.6),
       disputed: assertions.some((a) => a.disputed),
@@ -62,27 +89,31 @@ function settle(nodes: Node[], edges: [number, number][], steps: number) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i], b = nodes[j];
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const d2 = Math.max(64, dx * dx + dy * dy);
+        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+        const d2 = Math.max(64, dx * dx + dy * dy + dz * dz);
         const f = 2600 / d2, d = Math.sqrt(d2);
-        a.vx -= (dx / d) * f; a.vy -= (dy / d) * f;
-        b.vx += (dx / d) * f; b.vy += (dy / d) * f;
+        a.vx -= (dx / d) * f; a.vy -= (dy / d) * f; a.vz -= (dz / d) * f;
+        b.vx += (dx / d) * f; b.vy += (dy / d) * f; b.vz += (dz / d) * f;
       }
     }
     for (const [i, j] of edges) {
       const a = nodes[i], b = nodes[j];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.max(1, Math.hypot(dx, dy));
+      const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+      const d = Math.max(1, Math.hypot(dx, dy, dz));
       const pull = (d - 110) * 0.012;
-      a.vx += (dx / d) * pull; a.vy += (dy / d) * pull;
-      b.vx -= (dx / d) * pull; b.vy -= (dy / d) * pull;
+      a.vx += (dx / d) * pull; a.vy += (dy / d) * pull; a.vz += (dz / d) * pull;
+      b.vx -= (dx / d) * pull; b.vy -= (dy / d) * pull; b.vz -= (dz / d) * pull;
     }
     for (const n of nodes) {
       n.vx += (W / 2 - n.x) * 0.004;
       n.vy += (H / 2 - n.y) * 0.004;
-      n.vx *= 0.86; n.vy *= 0.86;
+      n.vz += (0 - n.z) * 0.004;
+      n.vx *= 0.86; n.vy *= 0.86; n.vz *= 0.86;
+      // Room to rotate: the box is bounded in x and y so nothing leaves frame,
+      // and in z so the far wall cannot swallow a node entirely.
       n.x = Math.max(n.r + 44, Math.min(W - n.r - 44, n.x + n.vx));
       n.y = Math.max(n.r + 14, Math.min(H - n.r - 14, n.y + n.vy));
+      n.z = Math.max(-DEPTH, Math.min(DEPTH, n.z + n.vz));
     }
   }
 }
@@ -105,6 +136,14 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   // O(n²) repulsion to arrive at the identical picture.
   const selectedRef = useRef<string | null>(null);
   const drawRef = useRef<(() => void) | null>(null);
+  // Rotation lives in refs for the same reason hover does: as state it would
+  // re-run the effect and re-settle 260 ticks of O(n²) repulsion on every
+  // mouse move of a drag.
+  const yawRef = useRef(0.5);
+  const pitchRef = useRef(-0.22);
+  const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -149,35 +188,47 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         }
       }
       ctx.clearRect(0, 0, W, H);
+      // Project every node once per frame, then paint far to near. Without the
+      // depth sort a near node can be drawn under a far one and the whole thing
+      // reads as flat noise rather than as a body with an inside.
+      const yaw = yawRef.current, pitch = pitchRef.current;
+      for (const n of nodes) {
+        const p = project(n, yaw, pitch);
+        n.sx = p.sx; n.sy = p.sy; n.sr = Math.max(1.5, n.r * p.k); n.depth = p.z;
+      }
+      const order = [...nodes].sort((a, b) => (b.depth ?? 0) - (a.depth ?? 0));
+      // Distance fade, kept subtle: depth should be felt, not performed.
+      const fade = (n: Node) => 0.45 + 0.55 * (1 - Math.min(1, ((n.depth ?? 0) + DEPTH) / (DEPTH * 2)));
       // 390 edges across 106 nodes drawn at full strength is a grey mat that
       // buries the nodes. They are context, so they sit back until you point.
       for (const [i, j] of edges) {
         const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
         ctx.strokeStyle = lit ? accent : line;
         ctx.lineWidth = lit ? 1.6 : 1;
-        ctx.globalAlpha = focus === null ? 0.38 : lit ? 0.9 : 0.14;
+        const dim = Math.min(fade(nodes[i]), fade(nodes[j]));
+        ctx.globalAlpha = (focus === null ? 0.38 : lit ? 0.9 : 0.14) * dim;
         ctx.beginPath();
-        ctx.moveTo(nodes[i].x, nodes[i].y);
-        ctx.lineTo(nodes[j].x, nodes[j].y);
+        ctx.moveTo(nodes[i].sx!, nodes[i].sy!);
+        ctx.lineTo(nodes[j].sx!, nodes[j].sy!);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      for (const n of nodes) {
+      for (const n of order) {
         const on = n.id === sel || n.id === focus;
         const related = focus !== null && (n.id === focus || near.has(n.id));
         // Most entities are known from a single fact. They stay on the board —
         // hiding them would misrepresent how much is thinly sourced — but they
         // sit back so the ones the studio actually knows well read first.
         const thin = n.claims <= 1 ? 0.5 : 1;
-        ctx.globalAlpha = focus === null ? thin : related ? 1 : 0.22;
+        ctx.globalAlpha = (focus === null ? thin : related ? 1 : 0.22) * fade(n);
         const colour = n.disputed ? warn : accent;
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.arc(n.sx!, n.sy!, n.sr!, 0, Math.PI * 2);
         ctx.fillStyle = colour; ctx.globalAlpha = on ? 0.5 : 0.26; ctx.fill(); ctx.globalAlpha = 1;
         ctx.strokeStyle = colour; ctx.lineWidth = on ? 2.5 : 1.5; ctx.stroke();
         if (on) {                                   // selection ring
           ctx.beginPath();
-          ctx.arc(n.x, n.y, n.r + 6, 0, Math.PI * 2);
+          ctx.arc(n.sx!, n.sy!, n.sr! + 6, 0, Math.PI * 2);
           ctx.strokeStyle = colour; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.stroke();
           ctx.globalAlpha = 1;
         }
@@ -185,7 +236,8 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
           ctx.fillStyle = on ? css.getPropertyValue("--ink").trim() || "#fff" : ink;
           ctx.font = `${on ? "600 " : ""}13px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = "center";
-          ctx.fillText(n.id.length > 22 ? `${n.id.slice(0, 21)}…` : n.id, n.x, n.y + n.r + 14);
+          ctx.fillText(n.id.length > 22 ? `${n.id.slice(0, 21)}…` : n.id,
+                       n.sx!, n.sy! + n.sr! + 14);
         }
       }
       ctx.globalAlpha = 1;
@@ -196,7 +248,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     // drifting each node around its settled position costs nothing and means
     // the graph is never frozen. The drift is ambient — it claims nothing.
     settle(nodes, edges, TICKS);
-    for (const n of nodes) { n.bx = n.x; n.by = n.y; n.phase = Math.random() * Math.PI * 2; }
+    for (const n of nodes) {
+      n.bx = n.x; n.by = n.y; n.bz = n.z; n.phase = Math.random() * Math.PI * 2;
+    }
     drawRef.current = draw;
     draw();
     // Reduced motion draws the settled layout once and stops. The redraw effect
@@ -210,6 +264,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       for (const n of nodes) {
         n.x = n.bx! + Math.sin(t * 0.42 + n.phase!) * 4.5;
         n.y = n.by! + Math.cos(t * 0.33 + n.phase!) * 3.5;
+        n.z = n.bz! + Math.sin(t * 0.27 + n.phase!) * 6;
       }
       draw();
       raf = requestAnimationFrame(drift);
@@ -237,23 +292,49 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     const y = ((clientY - box.top) / box.height) * H;
     let hit: string | null = null;
     let best = Infinity;
+    // Against the projected position: the model coordinates are behind a
+    // rotation now, so hit-testing them would pick the wrong node the moment
+    // the graph is turned.
     for (const n of nodesRef.current) {
-      const d = Math.hypot(n.x - x, n.y - y);
-      if (d <= n.r + 10 && d < best) { best = d; hit = n.id; }
+      if (n.sx === undefined || n.sy === undefined) continue;
+      const d = Math.hypot(n.sx - x, n.sy - y);
+      if (d <= (n.sr ?? n.r) + 10 && d < best) { best = d; hit = n.id; }
     }
     return hit;
   };
 
   const pick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    // A drag that ends on a node must not also select it — turning the graph is
+    // not the same gesture as opening something.
+    if (draggedRef.current) { draggedRef.current = false; return; }
     const hit = nodeAt(event.clientX, event.clientY);
     setSelected(hit === selected ? null : hit);
   };
 
   const track = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (drag) {
+      const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) draggedRef.current = true;
+      yawRef.current += dx * 0.008;
+      // Pitch is clamped short of the poles: past vertical the graph turns
+      // inside out and reads as a glitch rather than as rotation.
+      pitchRef.current = Math.max(-1.1, Math.min(1.1, pitchRef.current + dy * 0.006));
+      dragRef.current = { x: event.clientX, y: event.clientY };
+      drawRef.current?.();                 // reduced motion has no loop to repaint
+      return;
+    }
     const hit = nodeAt(event.clientX, event.clientY);
     hoveredRef.current = hit;              // the draw loop reads this next frame
     setHoverName(hit);                     // only to drive the cursor
   };
+
+  const startDrag = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    dragRef.current = { x: event.clientX, y: event.clientY };
+    draggedRef.current = false;
+    setDragging(true);
+  };
+  const endDrag = () => { dragRef.current = null; setDragging(false); };
 
   if (names.length === 0) return null;
   const entity = selected ? entities[selected] : null;
@@ -280,19 +361,28 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               ref={canvasRef}
               onClick={pick}
               onMouseMove={track}
-              onMouseLeave={() => { hoveredRef.current = null; setHoverName(null); }}
+              onMouseDown={startDrag}
+              onMouseUp={endDrag}
+              onMouseLeave={() => {
+                endDrag();
+                hoveredRef.current = null; setHoverName(null);
+              }}
               style={{
                 width: "100%", maxWidth: W, height: "auto", aspectRatio: `${W} / ${H}`,
-                cursor: hoverName ? "pointer" : "default",
+                cursor: dragging ? "grabbing" : hoverName ? "pointer" : "grab",
+                touchAction: "none",
               }}
               role="img"
-              aria-label={`${names.length} entities. Use the list below to inspect each one.`}
+              aria-label={`${names.length} entities in a rotatable three-dimensional graph. `
+                + `Drag to turn it. Use the list below to inspect each one, which does not `
+                + `require the graph.`}
             />
           </Reticle>
           <p className="graph-legend">
-            Bigger means more has been asserted. Amber means something about them is disputed.
-            A line means one question learned about both. Only the busiest are named — hover to
-            light up any other and everything it connects to, or click to read it.
+            Bigger means more has been asserted, and nearer is drawn larger — <b>drag to turn
+            the graph</b>. Amber means something about them is disputed. A line means one question
+            learned about both. Only the busiest are named — hover to light up any other and
+            everything it connects to, or click to read it.
           </p>
         </div>
 

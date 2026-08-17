@@ -81,9 +81,15 @@ export function ContextGraph() {
         </span>
       </h2>
 
-      <div className="chain" role="list">
+      {/* The chain is a corridor, not a row. Each step sits further back than the
+          one before it, so "this came from that" is carried by depth rather than
+          by an arrow you have to read. Transforms only — the layout, the tab
+          order and the text are unchanged, and a reader who cannot perceive the
+          depth loses nothing but the depth. */}
+      <div className="chain chain-3d" role="list">
         {present.map((k, i) => (
-          <div className="chain-step" key={k}>
+          <div className="chain-step" key={k}
+               style={{ "--step": i, "--steps": present.length } as React.CSSProperties}>
             <button
               role="listitem"
               className={`chain-node${kind === k ? " on" : ""}`}

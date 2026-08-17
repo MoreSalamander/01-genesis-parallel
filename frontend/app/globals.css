@@ -1046,3 +1046,30 @@ td.num { font-variant-numeric: tabular-nums; }
   font-size: 12px; color: var(--ink-2);
 }
 .vc-figs b { color: var(--ink); font-family: var(--mono); }
+
+
+/* --- the provenance chain, in depth (components/ContextGraph.tsx) -----------
+   Each step recedes, so "this came from that" is carried by the geometry rather
+   than only by an arrow. Restrained on purpose: the alive spec's line is that
+   this is a butler, not a rave — depth here is a few degrees and a little scale,
+   never a flight through space. */
+.chain-3d { perspective: 1100px; perspective-origin: 50% 50%; }
+.chain-3d .chain-step {
+  transform-style: preserve-3d;
+  /* Steps later in the chain sit further back and slightly smaller. */
+  transform:
+    translateZ(calc(var(--step, 0) * -22px))
+    rotateY(-9deg);
+  transition: transform 260ms var(--alive-ease, ease-out);
+}
+.chain-3d .chain-step:hover,
+.chain-3d .chain-step:focus-within {
+  /* Pointing at a step brings it forward — the one you are reading is nearest. */
+  transform: translateZ(18px) rotateY(0deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chain-3d { perspective: none; }
+  .chain-3d .chain-step,
+  .chain-3d .chain-step:hover,
+  .chain-3d .chain-step:focus-within { transform: none; transition: none; }
+}
