@@ -204,6 +204,16 @@ class SignalIntelligenceExecutive:
     def _deepen(self, mission: Mission) -> None:
         from app.knowledge import coverage
 
+        # A hole that the last round failed to close is still a hole, so the
+        # audit names it again and the loop asked the identical question twice:
+        # one mission raised 8 follow-ups of which only 6 were distinct. Re-asking
+        # spends a metered retrieval call to re-read the same corpus and reach the
+        # same answer — the same reasoning the source-count check below already
+        # applies, one level up. Rounds run inside a single `signal.deepen`
+        # activity, so this set spans all of them (a Temporal retry of that
+        # activity re-runs deepening from the top, and would re-ask).
+        asked: set[str] = set()
+
         for round_no in range(2, self.MAX_ROUNDS + 1):
             # Two different questions, asked of two different things.
             #
@@ -260,10 +270,27 @@ class SignalIntelligenceExecutive:
                 )
                 return
 
+            repeats = [g for g in gaps if g["question"] in asked]
+            gaps = [g for g in gaps if g["question"] not in asked]
+            if not gaps:
+                # Every shortfall named this round was already researched and did
+                # not close. Saying so is the honest end of the loop; asking again
+                # would only spend another round reaching the same place.
+                mission.stage(
+                    "SAME SHORTFALL",
+                    f"{len(repeats)} gap{'' if len(repeats) == 1 else 's'} named again after "
+                    f"round {round_no - 1} researched {'it' if len(repeats) == 1 else 'them'} "
+                    f"without closing {'it' if len(repeats) == 1 else 'them'} — "
+                    f"stated rather than re-asked: {repeats[0]['question'][:110]}",
+                )
+                return
+            asked.update(g["question"] for g in gaps)
+
             mission.stage(
                 "GAPS FOUND",
                 f"{(verdict or {}).get('reason', 'The answer is incomplete.')} "
-                f"Following up on {len(gaps)}: " + "; ".join(g["question"][:70] for g in gaps),
+                f"Following up on {len(gaps)}: " + "; ".join(g["question"][:70] for g in gaps)
+                + (f" ({len(repeats)} already researched, not re-asked)" if repeats else ""),
             )
             self.bus.emit(
                 "intelligence.gap_found", mission_id=mission.id, round=round_no,

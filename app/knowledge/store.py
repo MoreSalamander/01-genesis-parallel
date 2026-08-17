@@ -14,6 +14,7 @@ same writes are mirrored to DataHub (see knowledge/datahub/emitter.py).
 from __future__ import annotations
 
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,11 +50,46 @@ class LocalGraphStore:
             return json.loads(self.entities_path.read_text(encoding="utf-8"))
         return {}
 
-    def relationships(self, limit: int = 200) -> list[dict]:
+    # A blind tail hides exactly the edges worth seeing. One mission writes
+    # hundreds of source/evidence/claim edges and at most a handful of
+    # objective→gap edges, so the rarest kinds are always the first crowded out:
+    # the follow-up questions the deepen loop raised sat in this file at line
+    # 6,547 of 7,296 while the console asked for the last 400, and the context
+    # graph showed no follow-up questions for weeks even though every one of
+    # them had been recorded.
+    #
+    # So recency still sets the bulk of the window, but each kind present in the
+    # file is guaranteed a floor of its most recent edges. Bounded by
+    # limit + kinds x floor, and the payload stays in file order either way.
+    def relationships(self, limit: int = 200, per_kind_floor: int = 12) -> list[dict]:
         if not self.relationships_path.exists():
             return []
-        lines = self.relationships_path.read_text(encoding="utf-8").splitlines()[-limit:]
-        return [json.loads(line) for line in lines]
+
+        records: list[tuple[int, dict]] = []
+        for pos, line in enumerate(self.relationships_path.read_text(encoding="utf-8").splitlines()):
+            if not line.strip():
+                continue
+            try:
+                records.append((pos, json.loads(line)))
+            except json.JSONDecodeError:
+                continue  # a half-written line must not blank the whole graph
+
+        keep: dict[int, dict] = dict(records[-limit:]) if limit > 0 else {}
+        held = Counter()
+        for record in keep.values():
+            for kind in (record.get("src_kind"), record.get("dst_kind")):
+                if kind:
+                    held[kind] += 1
+
+        # Newest first, so a kind's floor is filled with its most recent edges.
+        for pos, record in reversed(records[: -limit or None]):
+            kinds = [k for k in (record.get("src_kind"), record.get("dst_kind")) if k]
+            if any(held[kind] < per_kind_floor for kind in kinds):
+                keep[pos] = record
+                for kind in kinds:
+                    held[kind] += 1
+
+        return [record for _, record in sorted(keep.items())]
 
     # -- writes --------------------------------------------------------------
     def ingest_mission(self, mission: Mission) -> list[str]:

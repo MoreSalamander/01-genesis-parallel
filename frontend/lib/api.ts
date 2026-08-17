@@ -40,6 +40,26 @@ export interface SystemStatus {
   runtime_proof?: RuntimeProof;
 }
 export interface EventRecord { event: string; at: string; mission_id?: string; [k: string]: unknown }
+/** One recorded call to Gemini (app/cognition_ledger.py). The summary carries
+ *  no prompt and no full response — `getCognitionCall` fetches those. */
+export interface CognitionCall {
+  id: string; at: string; role: string; model: string; live: boolean; ms: number;
+  parsed_ok: boolean; tokens: { prompt?: number; total?: number }; ref: string | null;
+  error: string; prompt_chars: number; raw_chars: number; preview: string;
+}
+/** The full record. `cognition_ledger.get` returns the stored entry as-is, so
+ *  the summary-only fields (prompt_chars, raw_chars, preview) are NOT on it —
+ *  measure the text itself. */
+export type CognitionDetail =
+  Omit<CognitionCall, "prompt_chars" | "raw_chars" | "preview"> & { prompt: string; raw: string };
+/** The cast (app/agents/roster.py): roles that run every mission, and the
+ *  domain specialists an objective can call up. */
+export interface StandingAgent { name: string; role: string; permissions: string[]; stage: string }
+export interface SpecialistAgent { name: string; focus: string; permissions: string[] }
+export interface AgentRoster {
+  standing: StandingAgent[];
+  domains: { domain: string; specialists: SpecialistAgent[] }[];
+}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { cache: "no-store", ...init });
@@ -72,7 +92,16 @@ export const getKnowledgeRelationships = (limit = 400) =>
   api<RelationshipRecord[]>(`/api/knowledge/relationships?limit=${limit}`);
 export const listMissions = () => api<MissionSummary[]>("/api/missions");
 export const getMission = (id: string) => api<MissionDetail>(`/api/missions/${id}`);
-export const getEvents = (limit = 300) => api<EventRecord[]>(`/api/events?limit=${limit}`);
+/** Pass `mission` to get that mission's own events wherever they sit in the
+ *  log — a global tail only ever covers the newest few missions. */
+export const getEvents = (limit = 300, mission = "") =>
+  api<EventRecord[]>(`/api/events?limit=${limit}${mission ? `&mission=${encodeURIComponent(mission)}` : ""}`);
+export const getAgents = () => api<AgentRoster>("/api/agents");
+/** Gemini's own record. `ref` scopes it to one mission (filtered server-side
+ *  across the whole ledger, so an older mission still resolves). */
+export const getCognition = (ref = "", limit = 40) =>
+  api<CognitionCall[]>(`/api/cognition?limit=${limit}${ref ? `&ref=${encodeURIComponent(ref)}` : ""}`);
+export const getCognitionCall = (id: string) => api<CognitionDetail>(`/api/cognition/${id}`);
 export const startMission = (objective: string) =>
   api<{ id: string; status: string }>("/api/missions", {
     method: "POST",

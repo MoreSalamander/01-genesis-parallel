@@ -5,6 +5,8 @@ import {
   ACTIVE_STATUSES, EventRecord, MissionDetail,
   decideMission, getEvents, getMission,
 } from "@/lib/api";
+import { AgentFleet } from "../../components/AgentFleet";
+import { GeminiLayer } from "../../components/GeminiLayer";
 import { MissionChip } from "../../components/Chips";
 import { ClaimCards } from "../../components/ClaimCards";
 import { ThinkingPanel } from "../../components/ThinkingPanel";
@@ -36,9 +38,11 @@ export default function MissionPage() {
   const refresh = useCallback(async () => {
     if (!id) return;
     try {
-      const [m, ev] = await Promise.all([getMission(id), getEvents(400)]);
+      // Asked for by mission: a global tail covers only the newest few, so an
+      // older mission used to render with none of its own activity.
+      const [m, ev] = await Promise.all([getMission(id), getEvents(400, id)]);
       setMission(m);
-      setEvents(ev.filter((e) => e.mission_id === id));
+      setEvents(ev);
     } catch { /* backend may still be starting */ }
   }, [id]);
 
@@ -161,6 +165,10 @@ export default function MissionPage() {
       )}
 
       <ThinkingPanel mission={mission} events={events} running={running} />
+
+      <AgentFleet mission={mission} events={events} running={running} />
+
+      <GeminiLayer missionId={mission.id} running={running} />
 
       {mission.findings.length > 0 && (
         <section className="panel">

@@ -78,8 +78,28 @@ class EventBus:
                 print(f"[events] NATS publish failed ({err}) — DEGRADED: audit log only")
                 self._nats_warned = True
 
-    def tail(self, limit: int = 100) -> list[dict]:
+    def tail(self, limit: int = 100, mission_id: str = "") -> list[dict]:
+        """Recent events, or the events of one mission wherever they sit.
+
+        The console reads a mission's own activity out of this stream — which
+        agent produced what, how many sources a domain found. Taking a global
+        tail and filtering it client-side meant only the newest missions had any
+        activity at all: 25 missions, and the last 400 events covered 3 of them.
+        Every older mission rendered as though its agents had found nothing.
+        """
         if not self.path.exists():
             return []
-        lines = self.path.read_text(encoding="utf-8").splitlines()[-limit:]
-        return [json.loads(line) for line in lines]
+        lines = self.path.read_text(encoding="utf-8").splitlines()
+        if mission_id:
+            # Substring first: cheap reject before paying for a JSON parse.
+            lines = [line for line in lines if mission_id in line]
+        out = []
+        for line in lines[-limit:]:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if mission_id and record.get("mission_id") != mission_id:
+                continue
+            out.append(record)
+        return out

@@ -176,3 +176,90 @@ def test_the_graph_records_the_link_the_audit_walks():
     src = inspect.getsource(store)
     assert '"finding", finding.id, "rests on", "claim"' in src, \
         "finding→claim edge missing: the provenance chain stays in two halves"
+
+
+def test_a_rare_kind_survives_a_busy_file(tmp_path):
+    """The loop can raise gaps, record them, and still show the Studio Head
+    nothing. A mission writes hundreds of source/evidence edges and a handful of
+    objective->gap edges, so a plain tail returns a window with no gap in it —
+    which is exactly what shipped: gap edges at line 6,547 of 7,296 while the
+    console asked for the last 400."""
+    import json
+
+    from app.knowledge.store import LocalGraphStore
+
+    path = tmp_path / "knowledge_relationships.jsonl"
+    lines = [json.dumps({"src_kind": "objective", "src": "m1", "rel": "raised",
+                         "dst_kind": "gap", "dst": f"what about {i}?", "mission_id": "m1"})
+             for i in range(3)]
+    lines += [json.dumps({"src_kind": "source", "src": f"s{i}", "rel": "produced",
+                          "dst_kind": "evidence", "dst": f"e{i}", "mission_id": "m2"})
+              for i in range(2000)]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+    rels = LocalGraphStore(tmp_path).relationships(limit=400)
+
+    assert [r for r in rels if r["dst_kind"] == "gap"], \
+        "follow-up questions fell outside the window — the graph cannot show what it never receives"
+    assert len(rels) < len(lines), "the window must stay bounded, not return the whole file"
+
+
+def test_an_older_missions_events_are_still_reachable(tmp_path):
+    """The console reads per-agent activity out of the event log. A global tail
+    covered only the newest missions — 25 missions, last 400 events spanning 3 —
+    so every older mission rendered as though its agents had found nothing."""
+    import json
+
+    from app.events.bus import EventBus
+
+    path = tmp_path / "events.jsonl"
+    old = [json.dumps({"event": "evidence.created", "mission_id": "old",
+                       "specialist": "Audience Agent", "count": 4})]
+    noise = [json.dumps({"event": "signal.discovered", "mission_id": "new", "source_id": f"s{i}"})
+             for i in range(900)]
+    path.write_text("\n".join(old + noise), encoding="utf-8")
+
+    bus = EventBus(tmp_path)
+    assert bus.tail(400, mission_id="old"), "the mission's own events must be reachable"
+    assert all(e["mission_id"] == "old" for e in bus.tail(400, mission_id="old"))
+    assert len(bus.tail(400)) == 400, "the unfiltered tail must stay a tail"
+
+
+def test_a_gap_is_not_asked_twice():
+    """A hole the last round failed to close is still a hole, so the audit names
+    it again — and the loop researched the identical question twice. One real
+    mission raised 8 follow-ups of which only 6 were distinct, spending a metered
+    retrieval call to re-read the same corpus for the same answer.
+
+    Driven through _deepen itself rather than asserted against its source: the
+    claim is about what the loop does across rounds, not how it is written."""
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+    from app.models.evidence import Source
+
+    same_gap = {"question": "What is the CPM for this niche?", "why": "nothing measures it"}
+    researched: list[list[dict]] = []
+
+    executive = Executive.__new__(Executive)          # no substrates needed for this path
+    executive.bus = type("B", (), {"emit": lambda self, *a, **k: None})()
+    executive.knowledge = type("K", (), {"relate": lambda self, *a, **k: None})()
+    # The audit keeps naming the same shortfall, which is the real-world case:
+    # the follow-up ran and did not close it.
+    executive._assess_sufficiency = lambda m: {"fulfilled": False, "reason": "short", "gaps": [same_gap]}
+
+    def research(mission, gaps, round_no):
+        researched.append([g["question"] for g in gaps])
+        mission.sources.append(Source(url=f"https://example.com/{round_no}", title="new"))
+
+    executive._research_gaps = research
+    executive._verify = lambda m: None
+    executive._build_knowledge = lambda m: None
+    executive._synthesize = lambda m: None
+
+    mission = Mission(objective="which faceless niche should we pick?")
+    executive._deepen(mission)
+
+    assert researched == [[same_gap["question"]]], \
+        f"the same question was researched more than once: {researched}"
+    stages = [s.name for s in mission.stages]
+    assert "SAME SHORTFALL" in stages, \
+        f"a fully-repeated round must be named rather than silently re-run: {stages}"

@@ -149,9 +149,22 @@ def knowledge_relationships(limit: int = 200) -> list[dict]:
     return get_runtime().knowledge.relationships(limit)
 
 
+@router.get("/agents")
+def agents() -> dict:
+    """The cast: standing roles, and the specialists an objective can call up.
+
+    Read from the role modules (app/agents/roster.py), so the console shows the
+    agents this build actually has rather than a list maintained beside them.
+    """
+    from app.agents import roster
+
+    return roster.roster()
+
+
 @router.get("/events")
-def events(limit: int = 100) -> list[dict]:
-    return get_runtime().bus.tail(limit)
+def events(limit: int = 100, mission: str = "") -> list[dict]:
+    """Recent activity, or one mission's own activity when `mission` is given."""
+    return get_runtime().bus.tail(limit, mission_id=mission)
 
 
 @router.get("/memory/episodic")

@@ -7,6 +7,7 @@
 
        source → evidence → claim → entity          (how a fact was assembled)
        question → finding → recommendation         (how a decision was reached)
+       question → gap                              (what it went back for)
 
    Each column is a kind of thing, sized by how many of them exist. Clicking a
    kind shows what it holds and what it connects to, so the chain can be walked
@@ -18,7 +19,8 @@ import { RelationshipRecord, getKnowledgeRelationships } from "@/lib/api";
 
 const KIND_LABEL: Record<string, string> = {
   source: "sources", evidence: "quotes", claim: "facts", entity: "companies & people",
-  objective: "questions", finding: "findings", recommendation: "recommendations",
+  objective: "questions", gap: "follow-up questions", finding: "findings",
+  recommendation: "recommendations",
 };
 const KIND_EXPLAIN: Record<string, string> = {
   source: "Web pages the researcher actually opened.",
@@ -26,10 +28,15 @@ const KIND_EXPLAIN: Record<string, string> = {
   claim: "Statements assembled from the quotes, then checked against each other.",
   entity: "The companies and people those statements are about.",
   objective: "The questions you asked.",
+  gap: "What the first answer left open. It went back and researched these before answering you.",
   finding: "The patterns worth acting on.",
   recommendation: "What it advised you to do.",
 };
-const ORDER = ["objective", "source", "evidence", "claim", "entity", "finding", "recommendation"];
+// `gap` sits next to `objective` because that is where it comes from: the
+// deepen loop audits an answer and writes objective ─raised─> gap. A kind
+// missing from this list is filtered out of the graph entirely, which is how
+// follow-up questions stayed invisible while being recorded all along.
+const ORDER = ["objective", "gap", "source", "evidence", "claim", "entity", "finding", "recommendation"];
 
 export function ContextGraph() {
   const [rels, setRels] = useState<RelationshipRecord[]>([]);

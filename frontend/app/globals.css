@@ -713,3 +713,116 @@ td.num { font-variant-numeric: tabular-nums; }
 .hud-panel.folded .hp-caret { transform: rotate(0deg); }
 .hud-panel.folded .hp-head { border-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .hp-caret { transition: none; } }
+
+
+/* --- the room: who worked on this (components/AgentFleet.tsx) --------------
+   Standing roles read as one row because they run every mission; the domains
+   read as columns because that is how cognition nests — objective, domain,
+   specialist. A dormant card stays legible rather than greyed to nothing: the
+   point it carries is that the role existed and was not needed. */
+.fleet.live { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+
+.fleet-standing {
+  display: grid; gap: 8px; margin-top: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.fleet-domains {
+  display: grid; gap: 10px; margin-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+.fleet-domain { display: grid; gap: 6px; align-content: start; --dot: var(--accent); }
+.fleet-domain.d-market    { --dot: var(--accent); }
+.fleet-domain.d-talent    { --dot: #4bc6a8; }
+.fleet-domain.d-industry  { --dot: #9085e9; }
+.fleet-domain.d-strategic { --dot: var(--warn); }
+
+.domain-head {
+  display: flex; align-items: center; gap: 7px;
+  font: 700 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-2); padding-bottom: 2px;
+}
+.domain-head .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--dot); flex: none;
+}
+
+.fleet .agent {
+  border: 1px solid var(--line); border-left: 2px solid var(--dot, var(--line));
+  border-radius: 7px; padding: 9px 11px; background: var(--surface-2);
+}
+.fleet .agent.standing { --dot: var(--line); }
+.fleet .agent.standing.done { --dot: var(--good); }
+.fleet .agent.standing.active { --dot: var(--accent); }
+.fleet .agent.dormant { background: none; opacity: 0.5; }
+
+.fleet .agent-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.fleet .agent-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.fleet .agent-state { font: 10.5px var(--mono); color: var(--accent); flex: none; }
+.fleet .agent.standing.done .agent-state { color: var(--good); }
+.fleet .agent-state.dim { color: var(--muted); }
+.fleet .agent-role {
+  margin-top: 4px; font-size: 12px; line-height: 1.45; color: var(--ink-2);
+}
+.fleet .agent.dormant .agent-role { color: var(--muted); }
+
+.fleet .perms { display: flex; gap: 4px; margin-top: 7px; flex-wrap: wrap; }
+.fleet .perm {
+  font: 9.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px;
+}
+.fleet-note {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 12.5px; line-height: 1.5; color: var(--ink-2);
+}
+.fleet-note.muted { color: var(--muted); font-size: 12px; border-top: 0; padding-top: 0; margin-top: 6px; }
+.fleet .agent-more { margin-top: 5px; font: 10.5px var(--mono); color: var(--muted); }
+
+
+/* --- the Gemini layer: what the model was asked and what it said ------------
+   (components/GeminiLayer.tsx). Rows read as a record, not a chat: role first
+   because that is what a reader is scanning for, cost and latency right-aligned
+   so slow calls are visible rather than smoothed over. */
+.gemini.live { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.gemini-intro { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); margin: 2px 0 12px; }
+
+.gemini-calls { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.gcall { border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); overflow: hidden; }
+.gcall.bad { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.gcall.open { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+.gcall-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; text-align: left; background: none; border: 0; cursor: pointer;
+  padding: 9px 11px; color: inherit; font: inherit;
+}
+.gcall-head:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.grole { font-size: 12.5px; color: var(--ink); }
+.gmeta { display: flex; align-items: baseline; gap: 8px; flex: none; }
+.gms, .gtok { font: 10.5px var(--mono); color: var(--muted); }
+.gtag {
+  font: 9.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+  border-radius: 3px; padding: 1px 5px; border: 1px solid var(--line); color: var(--muted);
+}
+.gtag.bad { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.gtag.mock { color: var(--muted); }
+
+.gpreview {
+  margin: 0; padding: 0 11px 9px; font: 11px var(--mono); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gdetail {
+  display: grid; gap: 10px; padding: 2px 11px 11px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.gside h4 {
+  margin: 0 0 5px; font: 700 10px var(--mono); letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-2); display: flex; gap: 8px; align-items: baseline;
+}
+.gside h4 .muted { letter-spacing: 0; text-transform: none; font-weight: 400; }
+.gside pre {
+  margin: 0; max-height: 260px; overflow: auto; padding: 9px 10px;
+  background: var(--page); border: 1px solid var(--line); border-radius: 6px;
+  font: 11px/1.5 var(--mono); color: var(--ink-2); white-space: pre-wrap; word-break: break-word;
+}
+.gerror { font-size: 12px; color: var(--warn); margin: 0 0 8px; }
