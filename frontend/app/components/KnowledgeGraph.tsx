@@ -33,17 +33,21 @@ const FOCAL = 900;          // perspective strength: larger is flatter
 /* The shape is a claim, so it says something true: a sun and a disc.
 
    Everything the studio holds a disagreement about is pulled into a mass at the
-   centre; everything settled spreads on a plane around it, each node wired back
-   to the same anchor. That is not decoration — the core is exactly the material
-   a Studio Head cannot act on without deciding something, and the size of that
-   mass against the disc is how much of the world model is contested.
+   centre; everything settled is held on a shell around it, evenly spaced, each
+   node wired back to the same anchor. That is not decoration — the core is
+   exactly the material a Studio Head cannot act on without deciding something,
+   and the size of that mass inside the shell is how much of the world model is
+   contested.
+
+   Only the shell's radius is constrained. Where a node sits on it is left to the
+   push between nodes, which is what makes the spacing even rather than assigned:
+   a sphere covered by mutual repulsion arrives at an even covering on its own.
 
    The forces are live and adjustable, because the right spacing depends on how
    much is on screen: four hundred entities want different numbers from forty.
    The controls write into a ref the simulation reads each tick, so moving one
    re-shapes the running model rather than restarting it. */
 const SUN_R = 74;              // how far the contested mass spreads from the anchor
-const PLANE_FLATTEN = 0.09;    // how hard the settled nodes are held to the disc
 
 export interface Forces {
   wire: number;      // length of the wire to the anchor — the disc's radius
@@ -143,12 +147,17 @@ function step(nodes: Node[], f: Forces): number {
       const gap = (SUN_R - dist) * f.pull * 1.6;
       n.vx += (ox / dist) * gap; n.vy += (oy / dist) * gap; n.vz += (oz / dist) * gap;
     } else {
-      // The disc: held at wire length within the plane, and flattened onto it.
-      const flat = Math.max(1, Math.hypot(ox, oz));
-      const gap = (f.wire - flat) * f.pull;
-      n.vx += (ox / flat) * gap;
-      n.vz += (oz / flat) * gap;
-      n.vy += (H / 2 - n.y) * PLANE_FLATTEN;
+      // The shell: held at wire length in every direction, so the settled
+      // material forms a sphere around the contested core rather than a plane
+      // through it. Only the radius is constrained — where a node sits on the
+      // shell is left to the push between them, which is what makes the spacing
+      // even rather than assigned. (A sphere covered by mutual repulsion is the
+      // Thomson arrangement; nothing here has to compute it, only allow it.)
+      const dist = Math.max(1, Math.hypot(ox, oy, oz));
+      const gap = (f.wire - dist) * f.pull;
+      n.vx += (ox / dist) * gap;
+      n.vy += (oy / dist) * gap;
+      n.vz += (oz / dist) * gap;
     }
     n.vx *= 0.84; n.vy *= 0.84; n.vz *= 0.84;
     n.x += n.vx; n.y += n.vy; n.z += n.vz;
