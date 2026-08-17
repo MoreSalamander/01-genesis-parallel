@@ -352,9 +352,6 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     const warn = css.getPropertyValue("--warn").trim() || "#fab219";
     const line = css.getPropertyValue("--line").trim() || "#232936";
     const ink = css.getPropertyValue("--ink-2").trim() || "#c0c6d4";
-    // The panel the canvas sits on. Needed because a node is drawn translucent,
-    // so without an opaque backing it takes the colour of whatever is behind it.
-    const panel = css.getPropertyValue("--surface-2").trim() || "#171c27";
     const dpr = window.devicePixelRatio || 1;
     canvas.width = W * dpr; canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -468,16 +465,17 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
            anchor wires, that was the connection colour: pick red for connections
            and the nodes went red with them. A node has to look like itself
            whatever is behind it, so the disc is made opaque first. */
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = panel;
-        ctx.fill();
         /* In the connection: filled solid in the connection's own colour, so the
            fan reads as one system — the lines and the nodes they touch are the
            same thing being shown.
 
-           Out of it: its own colour at 26%, over the opaque backing above, so it
-           stays itself rather than taking the tint of whatever is behind it. Both
-           halves are deliberate and they are different halves. */
+           Out of it: transparent, its own colour at 26% with nothing behind it,
+           so the wires and connections it sits over show through. There was an
+           opaque backing here for one revision, put in to stop the connection
+           colour tinting the fills — it worked, and it also made every unlit node
+           a flat disc that hid the structure behind it. Transparency was the
+           point, and a tint from what is genuinely behind a node is what
+           transparency looks like, not a bug. */
         ctx.fillStyle = inConnection ? edgeInk : colour;
         ctx.globalAlpha = inConnection ? 1 : on ? 0.5 : 0.26;
         ctx.fill();
