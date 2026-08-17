@@ -327,7 +327,7 @@ class SignalIntelligenceExecutive:
                     mission.stage(
                         "SHORTFALL NOTED",
                         f"{(verdict or {}).get('reason', 'The answer falls short of the objective.')} "
-                        "No researchable follow-up was identified, so nothing further was attempted.",
+                        "No researchable nested question was identified, so nothing further was attempted.",
                     )
                 return
             asked.update(g["question"] for g in gaps)
@@ -358,7 +358,7 @@ class SignalIntelligenceExecutive:
                 # questions of the same corpus and reach the same answer.
                 mission.stage(
                     "GAPS UNRESOLVED",
-                    "Follow-up research returned no further sources — the shortfall is stated "
+                    "The nested questions returned no further sources — the shortfall is stated "
                     "rather than closed.",
                 )
                 return
@@ -455,7 +455,7 @@ class SignalIntelligenceExecutive:
         except Exception as err:
             # A follow-up that fails is recorded as failed. It must not take the
             # parent's answer down with it (§12).
-            self._incomplete(child, f"Follow-up research failed: {err}")
+            self._incomplete(child, f"Nested-question research failed: {err}")
         finally:
             if self.missions is not None:
                 self.missions.put(child)
@@ -480,7 +480,7 @@ class SignalIntelligenceExecutive:
             question = gap["question"]
             child = self._raise_as_mission(mission, gap, round_no)
             if child is None:
-                mission.stage("FOLLOW-UP FAILED", f"{question[:80]} — nothing came back")
+                mission.stage("NESTED QUESTION FAILED", f"{question[:80]} — nothing came back")
                 continue
             raised.append(child.id)
             self.knowledge.relate(
@@ -511,18 +511,24 @@ class SignalIntelligenceExecutive:
                 )
             mission.observations.extend(child.observations)
             self.bus.emit("evidence.created", mission_id=mission.id, task_id=f"gap-{round_no}",
+                          # This string is a data key, not a label: 61 recorded
+                          # events already carry it and both the fleet tally and
+                          # the mission page look it up by exact name. Renaming it
+                          # to match the Studio Head's vocabulary would zero the
+                          # historical tally, so the console maps it for display
+                          # instead (frontend SPECIALIST_LABEL).
                           specialist="follow-up researcher", count=len(child.evidence))
 
         if raised:
             mission.stage(
                 "QUESTIONS RAISED",
-                f"{len(raised)} follow-up question{'' if len(raised) == 1 else 's'} asked as "
+                f"{len(raised)} nested question{'' if len(raised) == 1 else 's'} asked as "
                 f"missions of their own — each has its own answer on the board",
             )
 
         mission.stage(
             f"ROUND {round_no}",
-            f"{added} new source{'' if added == 1 else 's'} from {len(gaps)} follow-up question"
+            f"{added} new source{'' if added == 1 else 's'} from {len(gaps)} nested question"
             f"{'' if len(gaps) == 1 else 's'}",
         )
         return

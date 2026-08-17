@@ -72,6 +72,10 @@ const DOMAIN_CLASS: Record<string, string> = {
   market: "d-market", talent: "d-talent", industry: "d-industry", strategic: "d-strategic",
 };
 
+/* The recorded name of the researcher that works nested questions. It is a key
+   into the event log, so it is matched, never renamed. */
+export const NESTED_RESEARCHER = "follow-up researcher";
+
 /* A standing role has acted once its stage is in the mission's record. The
    stage names are the ones the executive writes (app/agents/executive). */
 const STAGE_DONE: Record<string, string[]> = {
@@ -115,8 +119,11 @@ export function AgentFleet({ mission, events, running }: {
     (n, d) => n + d.specialists.filter((s) => assigned.has(s.name)).length, 0);
   const total = roster.domains.reduce((n, d) => n + d.specialists.length, 0);
 
-  // The deepen loop hires a researcher that is not on the standing roster.
-  const followUp = yieldBy.get("follow-up researcher") ?? 0;
+  // The researcher that works the nested questions is not on the standing
+  // roster. Looked up by its recorded name, which stays "follow-up researcher"
+  // because 61 events already carry it — the label is mapped for display, the
+  // key is not renamed (see the note at the emit site).
+  const followUp = yieldBy.get(NESTED_RESEARCHER) ?? 0;
 
   return (
     <section className={`panel fleet ${running ? "live" : ""}`}>
@@ -189,8 +196,8 @@ export function AgentFleet({ mission, events, running }: {
 
       {followUp > 0 && (
         <p className="fleet-note">
-          A <b>follow-up researcher</b> was brought in after the first answer fell short of the
-          question, and returned {followUp} further quote{followUp === 1 ? "" : "s"}.
+          A <b>nested-question researcher</b> was brought in after the first answer fell short of
+          the question, and returned {followUp} further quote{followUp === 1 ? "" : "s"}.
         </p>
       )}
       <p className="fleet-note muted">

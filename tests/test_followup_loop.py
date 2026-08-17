@@ -544,3 +544,19 @@ def test_promoting_the_same_claim_twice_updates_it_rather_than_duplicating(tmp_p
     assert len(record["assertions"]) == 1
     assert record["assertions"][0]["status"] == "CONFLICTED"
     assert record["assertions"][0]["disputed"] is True
+
+
+def test_the_nested_researcher_name_stays_a_key_not_a_label():
+    """"Nested questions" is the Studio Head's word for these, and the console
+    says it everywhere. But the researcher's recorded name is a key into the
+    event log — 61 evidence.created events already carry "follow-up researcher",
+    and both the fleet tally and the mission page look it up by exact name.
+    Renaming it to match the vocabulary would zero the historical tally, so the
+    label is mapped for display and the key is left alone."""
+    import inspect
+
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+
+    src = inspect.getsource(Executive._research_gaps)
+    assert 'specialist="follow-up researcher"' in src, \
+        "the recorded specialist name changed — every historical tally now under-reports"
