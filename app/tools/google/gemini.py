@@ -87,6 +87,43 @@ class GeminiCognition:
         self._client = genai.Client()
         self._model = settings.gemini_model
 
+    # A 429 from Vertex means "too many in the last minute" far more often than
+    # "your budget is gone" — both arrive as RESOURCE_EXHAUSTED. Treating it as
+    # fatal threw away a whole mission's work over a limit that clears in
+    # seconds: 14 of 388 recorded calls failed this way, every one inside a
+    # minute carrying 11–18 calls, while the account had budget to spare.
+    #
+    # So the rate ceiling is waited out rather than reported as exhaustion. The
+    # waits are longer than the usual per-minute window and bounded: if it still
+    # fails, the caller hears about it and the mission records the failure
+    # honestly rather than retrying forever.
+    _RATE_BACKOFF_S = (5, 20, 45)
+
+    @staticmethod
+    def _is_rate_limited(err: Exception) -> bool:
+        blob = f"{type(err).__name__}: {err}".upper()
+        return "RESOURCE_EXHAUSTED" in blob or "429" in blob
+
+    def _retrying_call(self, prompt: str):
+        import time
+
+        last: Exception | None = None
+        for attempt, wait in enumerate((*self._RATE_BACKOFF_S, None)):
+            try:
+                return self._client.models.generate_content(
+                    model=self._model,
+                    contents=prompt,
+                    config={"response_mime_type": "application/json", "temperature": 0.2},
+                )
+            except Exception as err:
+                last = err
+                if wait is None or not self._is_rate_limited(err):
+                    raise
+                print(f"[gemini] rate limited, waiting {wait}s "
+                      f"(attempt {attempt + 1} of {len(self._RATE_BACKOFF_S) + 1})")
+                time.sleep(wait)
+        raise last if last else RuntimeError("gemini call failed with no error recorded")
+
     def generate_json(self, role: str, payload: dict[str, Any]) -> dict[str, Any]:
         import time
 
@@ -98,11 +135,7 @@ class GeminiCognition:
         tokens: dict[str, int] = {}
         try:
             with span("gemini.generate", role=role, model=self._model) as sp:
-                response = self._client.models.generate_content(
-                    model=self._model,
-                    contents=prompt,
-                    config={"response_mime_type": "application/json", "temperature": 0.2},
-                )
+                response = self._retrying_call(prompt)
                 usage = getattr(response, "usage_metadata", None)
                 if usage is not None:
                     tokens = {

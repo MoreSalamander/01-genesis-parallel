@@ -624,17 +624,17 @@ def test_the_tracker_shows_only_what_is_being_worked_on():
 
 
 def test_raising_questions_is_capped_and_stops_when_the_model_is_out_of_quota():
-    """Dispatching a nested question costs a mission's worth of model calls. Four
-    a round over two rounds spent eight of them per question asked, which
-    exhausted the Vertex quota in an afternoon (429 RESOURCE_EXHAUSTED) and left
-    thirteen dead missions on the board.
+    """Dispatching a nested question costs a mission's worth of model calls. Left
+    unbounded, four a round over two rounds spent eight of them per question
+    asked.
 
-    So: a ceiling across the whole mission, and a hard stop the moment the model
-    reports it is out — because every further question would produce another dead
-    mission."""
+    The ceiling is about cost, not rate limits: the 429s that first prompted it
+    were a per-minute ceiling, which gemini.py now waits out. A stop only belongs
+    here for a limit that survived those backoffs."""
     from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
 
-    assert Executive.MAX_RAISED_PER_MISSION <= 3, "the fan-out is wide enough to exhaust a quota"
+    assert 1 <= Executive.MAX_RAISED_PER_MISSION <= 4, \
+        "one answer must spend a bounded number of whole missions"
 
     # The ceiling counts across rounds, read off what the mission already did.
     mission = Mission(objective="test")
@@ -664,3 +664,23 @@ def test_a_question_that_retrieved_nothing_does_not_reach_the_board():
     src = inspect.getsource(Executive._raise_as_mission)
     assert "if self.missions is not None and child.sources:" in src, \
         "an empty nested question is still being written to the board"
+
+
+def test_a_rate_limited_call_is_waited_out_not_treated_as_exhaustion():
+    """Vertex returns 429 RESOURCE_EXHAUSTED for a per-minute ceiling and for a
+    spent budget alike. Fourteen of 388 recorded calls failed this way, every one
+    inside a minute carrying 11-18 calls, on an account with budget to spare — and
+    with no retry, each one killed a whole mission's work over a limit that clears
+    in seconds."""
+    from app.tools.google.gemini import GeminiCognition
+
+    rate = RuntimeError("429 RESOURCE_EXHAUSTED. {'error': {'code': 429}}")
+    other = RuntimeError("400 INVALID_ARGUMENT")
+    assert GeminiCognition._is_rate_limited(rate)
+    assert not GeminiCognition._is_rate_limited(other), \
+        "only a rate limit may be retried — a bad request would retry forever"
+
+    # Bounded, and each wait longer than the per-minute window it is clearing.
+    waits = GeminiCognition._RATE_BACKOFF_S
+    assert len(waits) >= 2 and list(waits) == sorted(waits), "backoff must grow"
+    assert sum(waits) >= 60, "the waits must outlast a per-minute ceiling"

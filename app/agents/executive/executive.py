@@ -397,13 +397,15 @@ class SignalIntelligenceExecutive:
     # planned narrow (§: the planner still reasons once about the whole question,
     # the plan is taken at the width we pay for), and a raised mission never
     # deepens, so it cannot raise children of its own.
-    # A ceiling across the whole mission, not per round. Four questions a round
-    # over two rounds dispatched eight extra missions per question asked, each
-    # with its own planner, extraction, verification and synthesis calls — that
-    # exhausted the Vertex quota in one afternoon (429 RESOURCE_EXHAUSTED) and
-    # left thirteen dead missions on the board. Raising a question costs real
-    # money; the rest of the round's shortfalls are stated on the parent instead.
-    MAX_RAISED_PER_MISSION = 2
+    # A ceiling across the whole mission, not per round. Unbounded, four questions
+    # a round over two rounds dispatched eight extra missions per question asked,
+    # each with its own planner, extraction, verification and synthesis calls.
+    #
+    # The ceiling is about cost, not rate limits — the 429s that prompted it were
+    # a per-minute ceiling, waited out in the client now, not a spent budget. So
+    # this is the number of whole missions one answer may spend, and it is a
+    # single constant to move. Past it the shortfall is still named on the answer.
+    MAX_RAISED_PER_MISSION = 4
     CHILD_TASKS_FOCUSED = 2      # corroborate this, settle that — narrow by nature
     CHILD_TASKS_NEW_GROUND = 5   # nothing is known about this yet; two queries answers it badly
     # The kinds that can be new ground. The others are questions *about* something
@@ -487,6 +489,12 @@ class SignalIntelligenceExecutive:
 
     @staticmethod
     def _out_of_quota(child: Mission) -> bool:
+        """Rate-limited *after* the client exhausted its backoffs (gemini.py).
+
+        A bare 429 is transient and is waited out below this level; reaching here
+        means it did not clear, which is the only version of this worth stopping
+        a mission's raising over.
+        """
         blob = (child.error or "").upper()
         return "RESOURCE_EXHAUSTED" in blob or "429" in blob
 
@@ -521,12 +529,14 @@ class SignalIntelligenceExecutive:
                 mission.stage("NESTED QUESTION FAILED", f"{question[:80]} — nothing came back")
                 continue
             if self._out_of_quota(child):
-                # The model is rate-limited. Raising more questions now produces
-                # more dead missions, so stop and say so.
+                # The client already waited out three backoffs before this
+                # surfaced, so the limit is not clearing on its own timescale.
+                # Raising more now just produces more dead missions.
                 mission.stage(
                     "RAISING PAUSED",
-                    "The model is out of quota, so no further questions were raised from this "
-                    "answer. What is missing is named above rather than filled in.",
+                    "The model stayed rate-limited through three backoffs, so no further "
+                    "questions were raised from this answer. What is missing is named above "
+                    "rather than filled in.",
                 )
                 break
             budget -= 1
