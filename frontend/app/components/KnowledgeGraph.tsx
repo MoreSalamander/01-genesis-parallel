@@ -565,11 +565,16 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         ctx.fill();
         // The ring carries the node's own colour — amber still means disputed
         // while the fill is showing the connection — at the node's own transparency.
-        /* The ring is solid whatever the fill is doing. A see-through node still
-           has to have a definite edge — that is what makes it a node rather than a
-           smudge, and it is what lets the fill be as faint as 26% without the node
-           disappearing. So: transparent interior, solid outline. */
-        ctx.strokeStyle = colour;
+        /* Every node has a solid ring, whatever its fill is doing: a see-through
+           node still needs a definite edge, and that is what lets a fill sit at 26%
+           without the node becoming a smudge.
+
+           A disputed node is ringed in black. Inside the contested mass the fills
+           are light and crowded together, and an amber ring on an amber fill draws
+           no border at all — six hundred overlapping ambers read as one shape. A
+           dark outline is what separates them into countable things, and it reads
+           against the light core precisely where an amber ring disappears. */
+        ctx.strokeStyle = n.disputed ? "#05070b" : colour;
         ctx.globalAlpha = 1;
         ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
         ctx.stroke();
