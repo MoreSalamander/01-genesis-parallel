@@ -35,11 +35,11 @@ export function RaisedQuestions({ mission }: { mission: MissionDetail }) {
   return (
     <section className="panel raised">
       <h2>
-        {children.length > 0 ? "What this answer went on to ask" : "Where this question came from"}
+        {children.length > 0 ? "Nested questions this answer raised" : "Where this question came from"}
         {children.length > 0 && (
           <span className="muted">
-            {" · "}{children.length} question{children.length === 1 ? "" : "s"} it raised for itself,
-            each with its own answer
+            {" · "}{children.length} question{children.length === 1 ? "" : "s"} raised from this answer,
+            each researched and answered on its own
           </span>
         )}
       </h2>

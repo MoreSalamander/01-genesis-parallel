@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ACTIVE_STATUSES, MissionSummary, groupByQuestion, listMissions } from "@/lib/api";
+import { ACTIVE_STATUSES, MissionSummary, listMissions } from "@/lib/api";
 import { Rolling } from "@/lib/alive";
 
 export function Rail() {
@@ -30,8 +30,15 @@ export function Rail() {
   // recommendation but is finished — counting it as working left dead missions
   // "in flight" for days.
   const open = missions.filter((m) => ACTIVE_STATUSES.has(m.status)).length;
-  // The same question asked twice is one entry, not two.
-  const asked = groupByQuestion(missions);
+  // Nested questions: the ones the loop raised from an answer. Being worked
+  // through comes first — the rest newest first.
+  const byId = new Map(missions.map((m) => [m.id, m]));
+  const nested = missions
+    .filter((m) => m.raised_by)
+    .sort((a, b) => {
+      const working = Number(ACTIVE_STATUSES.has(b.status)) - Number(ACTIVE_STATUSES.has(a.status));
+      return working !== 0 ? working : b.created_at.localeCompare(a.created_at);
+    });
 
   const vitals = [
     { label: "answers", value: missions.length },
@@ -62,23 +69,43 @@ export function Rail() {
         </div>
       )}
 
+      {/* Nested questions, not a second copy of the question list. The rail
+          used to repeat the eight most recent answers, which the board already
+          shows in full — so the always-on slot said nothing you could not see by
+          scrolling. What is worth keeping in view is the enquiry extending
+          itself: an answer audited against the context graph, the graph naming
+          what is thin, and each shortfall going off to be researched as a
+          question of its own. In flight first, because that is the part that
+          changes while you watch. */}
       <div className="rail-block">
-        <div className="rail-head">recent answers</div>
-        {missions.length === 0 && <div className="rail-empty">nothing asked yet</div>}
-        {asked.slice(0, 8).map(({ latest: m, times }) => (
-          <Link
-            href={`/missions/${m.id}`}
-            key={m.id}
-            className={`rail-item alive-track${path === `/missions/${m.id}` ? " on" : ""}`}
-          >
-            <span className="q">{m.objective}</span>
-            <span className="s">
-              {m.sources} sources
-              {m.conflicted > 0 ? ` · ${m.conflicted} conflict${m.conflicted === 1 ? "" : "s"}` : ""}
-              {times > 1 ? ` · asked ${times}×` : ""}
-            </span>
-          </Link>
-        ))}
+        <div className="rail-head">nested questions</div>
+        {nested.length === 0 && (
+          <div className="rail-empty">
+            {missions.length === 0
+              ? "nothing asked yet"
+              : "none yet — an answer that leaves something thin raises one here"}
+          </div>
+        )}
+        {nested.slice(0, 8).map((m) => {
+          const parent = byId.get(m.raised_by);
+          const working = ACTIVE_STATUSES.has(m.status);
+          return (
+            <Link
+              href={`/missions/${m.id}`}
+              key={m.id}
+              className={`rail-item nested${working ? " working" : ""} alive-track${
+                path === `/missions/${m.id}` ? " on" : ""}`}
+            >
+              <span className="q">{m.objective}</span>
+              <span className="s">
+                {working
+                  ? <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
+                  : `${m.sources} sources`}
+                {parent && <span className="from">from: {parent.objective}</span>}
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </aside>
   );

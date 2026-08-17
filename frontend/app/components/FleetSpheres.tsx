@@ -89,7 +89,7 @@ export function FleetSpheres({ running }: { running: boolean }) {
 
       {fleet.follow_up.produced > 0 && (
         <p className="fleet-foot">
-          A <b>follow-up researcher</b> is hired whenever an answer falls short of its question —
+          A <b>follow-up researcher</b> works the nested questions an answer raises —
           {" "}{fleet.follow_up.tasks} round{fleet.follow_up.tasks === 1 ? "" : "s"} so far,
           {" "}{fleet.follow_up.produced} further quotes.
         </p>

@@ -235,6 +235,10 @@ const EVENT_LABEL: Record<string, string> = {
   "threat.detected": "flagged a risk",
   "intelligence.completed": "closed the loop",
   "intelligence.incomplete": "closed the loop — incomplete",
+  // Nested questions. Both of these were emitting and neither had a line here,
+  // so the feed printed the raw event name at the Studio Head.
+  "intelligence.gap_found": "found what its own answer left open",
+  "intelligence.raised": "asked itself a new question",
   "authorization.decided": "recorded your decision",
 };
 
@@ -246,6 +250,7 @@ const TONE: Record<string, string> = {
   "signal.complete": "ok",
   "claim.verified": "ok",
   "intelligence.completed": "ok",
+  "intelligence.raised": "ok",
 };
 
 function clock(at: string) {

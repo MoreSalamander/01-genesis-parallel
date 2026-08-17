@@ -511,3 +511,36 @@ def test_the_board_tally_names_the_model_that_actually_ran():
     ranked_off = (Counter(r["model"] for r in offline if r.get("live"))
                   or Counter(r["model"] for r in offline))
     assert ranked_off.most_common(1)[0][0] == "fixture (no model called)"
+
+
+def test_promoting_the_same_claim_twice_updates_it_rather_than_duplicating(tmp_path):
+    """_build_knowledge runs again on every deepening round, so a claim promoted
+    in the first pass is promoted again in the second. Appending blindly wrote it
+    twice: 151 of 343 entities carried duplicates, the world model reported more
+    knowledge than it held, and the console keyed two cards off one claim id.
+
+    Re-promotion must also carry an updated verdict — a second pass can turn a
+    VERIFIED claim CONFLICTED, and that has to land."""
+    from app.knowledge.store import LocalGraphStore
+
+    claim = Claim(text="Halcyon led the round", entity="Halcyon Ventures",
+                  status=VerificationStatus.VERIFIED, corroborating_sources=3)
+    mission = Mission(objective="who funded it?")
+    mission.claims = [claim]
+
+    store = LocalGraphStore(tmp_path)
+    store.ingest_mission(mission)
+    store.ingest_mission(mission)          # the deepening round promotes again
+
+    record = store.entities()["Halcyon Ventures"]
+    assert len(record["assertions"]) == 1, \
+        f"one claim became {len(record['assertions'])} things the studio knows"
+
+    # Same claim, new verdict: the record must reflect the change in place.
+    claim.status = VerificationStatus.CONFLICTED
+    claim.conflict_detail = "sources disagree on the amount"
+    store.ingest_mission(mission)
+    record = store.entities()["Halcyon Ventures"]
+    assert len(record["assertions"]) == 1
+    assert record["assertions"][0]["status"] == "CONFLICTED"
+    assert record["assertions"][0]["disputed"] is True

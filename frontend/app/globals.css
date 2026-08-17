@@ -936,3 +936,44 @@ td.num { font-variant-numeric: tabular-nums; }
 .engine-roles .rm { margin-left: auto; }
 .engine-foot { margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { .gemini-object.thinking .engine-ring .a0 { animation: none; } }
+
+
+/* --- nested questions (components/NestedQuestions.tsx) ---------------------
+   A question you asked is a root; the questions its answer raised sit under it.
+   The indent and the elbow carry the nesting, so a glance says which questions
+   the system set itself without a badge on every row. */
+.nested-list { list-style: none; padding: 0; margin: 0; }
+.nested-children { list-style: none; padding: 0; margin: 2px 0 10px 0; }
+.nested-row {
+  display: grid; grid-template-columns: 18px 1fr; gap: 0 8px;
+  padding: 7px 10px 7px 0; margin-left: 12px; text-decoration: none; color: inherit;
+  border-left: 1px solid var(--line);
+}
+.nested-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.nested-row .branch {
+  grid-row: 1 / span 2; align-self: start; margin-top: 8px; margin-left: -1px;
+  width: 13px; height: 9px;
+  border-left: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  border-bottom-left-radius: 5px;
+}
+.nested-row .q { font-size: 12.5px; color: var(--ink-2); }
+.nested-row:hover .q { color: var(--ink); }
+.nested-row .line {
+  grid-column: 2; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0;
+  margin-top: 3px; font: 10.5px var(--mono); color: var(--muted);
+}
+.nested-none { padding: 10px 0 2px; font-size: 12.5px; line-height: 1.55; }
+.nested-working {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+  font: 11.5px var(--mono); color: var(--accent);
+}
+
+
+/* --- nested questions in the rail (components/Rail.tsx) --------------------- */
+.rail-item.nested { border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--line)); padding-left: 8px; }
+.rail-item.nested.working { border-left-color: var(--accent); }
+.rail-item.nested .s { display: grid; gap: 2px; }
+.rail-item.nested .from {
+  display: block; font-size: 10px; color: var(--muted); opacity: 0.85;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -9,6 +8,7 @@ import {
 import { HowThisWorks } from "./components/HowThisWorks";
 import { ContextGraph } from "./components/ContextGraph";
 import { FleetSpheres } from "./components/FleetSpheres";
+import { NestedQuestions } from "./components/NestedQuestions";
 import { GeminiObject } from "./components/GeminiObject";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
 import { Feed, Panel, Readout, Ring, RingLegend } from "./components/Hud";
@@ -45,15 +45,6 @@ const FIXTURE_STARTERS = [
   "Which creative leaders changed studios recently?",
   "Who is building virtual production capacity?",
 ];
-
-/* What happened to a question, said the way you would say it. */
-const OUTCOME: Record<string, { word: string; cls: string }> = {
-  APPROVED: { word: "You accepted this", cls: "ok" },
-  REJECTED: { word: "You discarded this", cls: "off" },
-  MORE_RESEARCH_REQUESTED: { word: "Sent back for more", cls: "busy" },
-  RECOMMENDED: { word: "Waiting on your decision", cls: "wait" },
-  INCOMPLETE: { word: "Couldn’t finish honestly", cls: "off" },
-};
 
 export default function Board() {
   const router = useRouter();
@@ -215,42 +206,10 @@ export default function Board() {
           title="Everything you have asked"
           className="answers"
           foldId="asked"
-          meta={`${asked.length} question${asked.length === 1 ? "" : "s"}${
-            asked.length === missions.length ? "" : ` · ${missions.length} runs`} · newest first`}
+          meta={`${asked.length} question${asked.length === 1 ? "" : "s"} · ${
+            missions.filter((m) => m.raised_by).length} nested · newest first`}
         >
-          <ul className="answer-list alive-cascade">
-            {asked.map(({ latest: m, times }, i) => {
-              const state = OUTCOME[m.status] ?? { word: "Working on it", cls: "busy" };
-              return (
-                <li key={m.id} style={cascade(i)}>
-                  <Link href={`/missions/${m.id}`} className="answer-row alive-track">
-                    {/* A question the loop raised reads as a question, with no
-                        badge setting it apart. Studio Head's call: the board is
-                        a list of what has been asked, and it does not matter to
-                        reading it whether the asking was typed. Where it came
-                        from is still recorded, and still on its own page. */}
-                    <span className="q">{m.objective}</span>
-                    <span className="line">
-                      <span className={`state ${state.cls}`}>{state.word}</span>
-                      <span className="sep">·</span>
-                      <span>{m.sources} sources read</span>
-                      {m.verified > 0 && <><span className="sep">·</span><span>{m.verified} confirmed</span></>}
-                      {m.conflicted > 0 && (
-                        <><span className="sep">·</span>
-                        <span className="conflict">
-                          {m.conflicted} disagreement{m.conflicted === 1 ? "" : "s"} kept
-                        </span></>
-                      )}
-                      {times > 1 && (
-                        <><span className="sep">·</span>
-                        <span className="muted">asked {times}× — showing the latest</span></>
-                      )}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <NestedQuestions asked={asked} missions={missions} />
         </Panel>
       )}
 

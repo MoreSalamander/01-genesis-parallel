@@ -7,7 +7,7 @@
 
        source → evidence → claim → entity          (how a fact was assembled)
        question → finding → recommendation         (how a decision was reached)
-       question → gap                              (what it went back for)
+       question → nested question                   (what the answer raised)
 
    Each column is a kind of thing, sized by how many of them exist. Clicking a
    kind shows what it holds and what it connects to, so the chain can be walked
@@ -19,7 +19,7 @@ import { RelationshipRecord, getKnowledgeRelationships } from "@/lib/api";
 
 const KIND_LABEL: Record<string, string> = {
   source: "sources", evidence: "quotes", claim: "facts", entity: "companies & people",
-  objective: "questions", gap: "follow-up questions", finding: "findings",
+  objective: "questions", gap: "nested questions", finding: "findings",
   recommendation: "recommendations",
 };
 const KIND_EXPLAIN: Record<string, string> = {
@@ -28,7 +28,7 @@ const KIND_EXPLAIN: Record<string, string> = {
   claim: "Statements assembled from the quotes, then checked against each other.",
   entity: "The companies and people those statements are about.",
   objective: "The questions you asked.",
-  gap: "What the first answer left open. It went back and researched these before answering you.",
+  gap: "What the first answer left open. Each became a question of its own, researched before answering you.",
   finding: "The patterns worth acting on.",
   recommendation: "What it advised you to do.",
 };

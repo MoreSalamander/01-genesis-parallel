@@ -112,18 +112,32 @@ class LocalGraphStore:
                 {"name": claim.entity, "type": _entity_type(claim.entity), "first_seen": now, "assertions": []},
             )
             record["last_updated"] = now
-            record["assertions"].append(
-                {
-                    "claim": claim.text,
-                    "status": claim.status.value,
-                    "disputed": claim.status == VerificationStatus.CONFLICTED,
-                    "conflict_detail": claim.conflict_detail,
-                    "corroborating_sources": claim.corroborating_sources,
-                    "mission_id": mission.id,
-                    "claim_id": claim.id,
-                    "at": now,
-                }
-            )
+            assertion = {
+                "claim": claim.text,
+                "status": claim.status.value,
+                "disputed": claim.status == VerificationStatus.CONFLICTED,
+                "conflict_detail": claim.conflict_detail,
+                "corroborating_sources": claim.corroborating_sources,
+                "mission_id": mission.id,
+                "claim_id": claim.id,
+                "at": now,
+            }
+            # One claim is one thing the studio knows, however many times it is
+            # promoted. This runs again on every deepening round, and appending
+            # blindly wrote the same claim two, three, four times: 151 of 343
+            # entities carried duplicates, so the world model reported more
+            # knowledge than it held and the console keyed two cards off one
+            # claim id. Re-promoting refreshes the assertion in place — which is
+            # also correct, because the second pass may have turned a VERIFIED
+            # claim CONFLICTED and that update must land, not accumulate beside
+            # the old one.
+            existing = next((i for i, a in enumerate(record["assertions"])
+                             if a.get("claim_id") == claim.id), None)
+            if existing is None:
+                record["assertions"].append(assertion)
+            else:
+                assertion["at"] = record["assertions"][existing].get("at", now)
+                record["assertions"][existing] = assertion
             touched.add(claim.entity)
             self._relate("claim", claim.id, "about", "entity", claim.entity, mission.id)
             for evidence_id in claim.evidence_ids:
