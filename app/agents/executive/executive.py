@@ -40,7 +40,9 @@ class SignalIntelligenceExecutive:
         searcher=None,     # OpenSearch evidence index
         semantic=None,     # Qdrant semantic memory
         worldgraph=None,   # Neo4j world-model graph
+        missions=None,     # WorkingMemory — lets a raised question reach the board
     ):
+        self.missions = missions
         self.objects = objects
         self.searcher = searcher
         self.semantic = semantic
@@ -208,6 +210,12 @@ class SignalIntelligenceExecutive:
     def _deepen(self, mission: Mission) -> None:
         from app.knowledge import coverage
 
+        if mission.raised_by:
+            # This mission is itself a follow-up. It answers its question and
+            # stops: without this the tree is unbounded, and every node of it
+            # spends real retrieval calls.
+            return
+
         # A hole that the last round failed to close is still a hole, so the
         # audit names it again and the loop asked the identical question twice:
         # one mission raised 8 follow-ups of which only 6 were distinct. Re-asking
@@ -287,7 +295,8 @@ class SignalIntelligenceExecutive:
                     if queue and len(spread) < self.HOLES_PER_ROUND:
                         spread.append(queue.pop(0))
             gaps: list[dict] = [
-                {"question": hole.as_question(), "why": hole.detail, "where": hole.where}
+                {"question": hole.as_question(), "why": hole.detail, "where": hole.where,
+                 "kind": hole.kind}
                 for hole in spread
             ]
             seen_questions = {g["question"] for g in gaps}
@@ -379,84 +388,144 @@ class SignalIntelligenceExecutive:
             mission.stage("AUDIT UNAVAILABLE", f"Could not check the answer against the objective: {err}")
             return None
 
-    def _research_gaps(self, mission: Mission, gaps: list[dict], round_no: int) -> None:
-        """Research the gap questions and fold the results into the mission.
+    # A follow-up is a question, and a question belongs on the board with its own
+    # answer — the way one you typed does. So each gap becomes a real mission:
+    # its own page, its own agents, its own place in the graph, marked with what
+    # raised it rather than passed off as asked.
+    #
+    # Two things keep that from becoming a runaway bill. A raised mission is
+    # planned narrow (§: the planner still reasons once about the whole question,
+    # the plan is taken at the width we pay for), and a raised mission never
+    # deepens, so it cannot raise children of its own.
+    CHILD_TASKS_FOCUSED = 2      # corroborate this, settle that — narrow by nature
+    CHILD_TASKS_NEW_GROUND = 5   # nothing is known about this yet; two queries answers it badly
+    # The kinds that can be new ground. The others are questions *about* something
+    # already in hand, however little.
+    _NEW_GROUND = {"unknown_entity", "like_thing"}
 
-        This mirrors _research rather than merely collecting URLs: a source with
-        no evidence extracted from it produces no claims, so verification would
-        have nothing new to check and the extra round would change nothing.
+    def _width_for(self, gap: dict) -> int:
+        """Let the context decide how wide a raised question runs.
+
+        A fixed width is wrong in both directions. "Is this corroborated
+        elsewhere?" is one question and a five-task plan spends four of them
+        re-covering the parent's ground; "what is confirmed about this company
+        nobody has looked at?" is a subject, and answering it with two queries
+        produces exactly the thin answer that raised the question. So the graph
+        is asked how much the studio already holds on the thing, and the plan is
+        taken at that width.
+        """
+        if gap.get("kind") not in self._NEW_GROUND:
+            return self.CHILD_TASKS_FOCUSED
+        subject = (gap.get("where") or "").strip().lower()
+        if not subject:
+            return self.CHILD_TASKS_FOCUSED
+        try:
+            known = {name.lower(): record for name, record in self.knowledge.entities().items()}
+        except Exception:
+            return self.CHILD_TASKS_FOCUSED
+        held = len((known.get(subject) or {}).get("assertions", []))
+        return self.CHILD_TASKS_FOCUSED if held else self.CHILD_TASKS_NEW_GROUND
+
+    def _raise_as_mission(self, parent: Mission, gap: dict, round_no: int) -> Mission | None:
+        child = Mission(
+            objective=gap["question"],
+            raised_by=parent.id,
+            raised_because=gap.get("why", "") or f"raised while answering {parent.objective[:80]}",
+        )
+        child.stage("RAISED", f"Raised by '{parent.objective[:80]}' — {child.raised_because[:120]}")
+        try:
+            width = self._width_for(gap)
+            child.tasks = self.planner.plan(child.objective, STUDIO_CONTEXT, max_tasks=width)
+            if not child.tasks:
+                return None
+            child.stage(
+                "PLANNED",
+                f"{len(child.tasks)} line{'' if len(child.tasks) == 1 else 's'} of enquiry — "
+                + ("new ground for the studio, so this runs wide"
+                   if width == self.CHILD_TASKS_NEW_GROUND else
+                   "the studio already holds a record here, so this stays focused"),
+            )
+            self._research(child)
+            if not child.sources:
+                return None
+            self._verify(child)
+            self._build_knowledge(child)
+            self._synthesize(child)
+            self.complete(child)
+        except Exception as err:
+            # A follow-up that fails is recorded as failed. It must not take the
+            # parent's answer down with it (§12).
+            self._incomplete(child, f"Follow-up research failed: {err}")
+        finally:
+            if self.missions is not None:
+                self.missions.put(child)
+        self.bus.emit("intelligence.raised", mission_id=child.id, raised_by=parent.id,
+                      round=round_no, objective=child.objective)
+        return child
+
+    def _research_gaps(self, mission: Mission, gaps: list[dict], round_no: int) -> None:
+        """Run each gap as its own mission, then fold what it found into this one.
+
+        The child carries the answer to its own question; the parent still has to
+        absorb the evidence, because the shortfall being closed is the parent's.
+        Folding rather than re-researching is also why one retrieval pass serves
+        both places.
         """
         mission.status = MissionStatus.RESEARCHING
         seen_urls = {s.url: s for s in mission.sources}
         added = 0
+        raised: list[str] = []
 
         for gap in gaps:
             question = gap["question"]
-            try:
-                results = self.parallel.search(
-                    objective=question, queries=[question], session_id=mission.id
-                )
-            except Exception as err:
-                mission.stage("FOLLOW-UP FAILED", f"{question[:80]} — {err}")
+            child = self._raise_as_mission(mission, gap, round_no)
+            if child is None:
+                mission.stage("FOLLOW-UP FAILED", f"{question[:80]} — nothing came back")
                 continue
-
-            new_results = []
-            for result in results:
-                if result.url in seen_urls:
-                    continue
-                source = Source(url=result.url, title=result.title)
-                seen_urls[result.url] = source
-                mission.sources.append(source)
-                self.bus.emit("signal.discovered", mission_id=mission.id, source_id=source.id,
-                              title=source.title, url=source.url, domain="follow-up")
-                if self.objects is not None:
-                    self.objects.put_source(mission.id, source.id, result.model_dump())
-                new_results.append(result)
-                added += 1
-            if not new_results:
-                continue
-
-            extraction = self.cognition.generate_json(
-                "evidence_extraction",
-                {"objective": question,
-                 "results": [{"url": r.url, "title": r.title, "excerpts": r.excerpts}
-                             for r in new_results]},
+            raised.append(child.id)
+            self.knowledge.relate(
+                "gap", question[:180], "answered by", "objective", child.id, mission.id
             )
-            created = 0
-            for item in extraction.get("claims", []):
-                source = seen_urls.get(item.get("source_url", ""))
-                if source is None:
+
+            # Fold the child's evidence in, skipping anything already held.
+            for source in child.sources:
+                if source.url in seen_urls:
                     continue
-                observation = Observation(source_id=source.id, statement=item.get("statement", ""))
-                mission.observations.append(observation)
+                seen_urls[source.url] = source
+                mission.sources.append(source)
+                added += 1
+            held = {s.url for s in mission.sources}
+            by_id = {s.id: s for s in child.sources}
+            for item in child.evidence:
+                source = by_id.get(item.source_id)
+                if source is None or source.url not in held:
+                    continue
                 mission.evidence.append(
-                    Evidence(
-                        observation_id=observation.id,
-                        source_id=source.id,
-                        claim_text=item.get("claim", item.get("statement", "")),
-                        supporting_content=item.get("statement", ""),
-                        confidence=float(item.get("confidence", 0.5)),
-                        related_entities=[item["entity"]] if item.get("entity") else [],
-                        provenance={
-                            "mission_id": mission.id,
-                            "round": round_no,
-                            "gap_question": question,
-                            "specialist": "follow-up researcher",
-                            "domain": "follow-up",
-                            "queries": [question],
-                            "tool": "parallel-search" if self.parallel.live else "parallel-search(mock)",
-                        },
-                    )
+                    item.model_copy(update={"provenance": dict(
+                        item.provenance,
+                        mission_id=mission.id,
+                        round=round_no,
+                        gap_question=question,
+                        raised_mission_id=child.id,
+                    )})
                 )
-                created += 1
+            mission.observations.extend(child.observations)
             self.bus.emit("evidence.created", mission_id=mission.id, task_id=f"gap-{round_no}",
-                          specialist="follow-up researcher", count=created)
+                          specialist="follow-up researcher", count=len(child.evidence))
+
+        if raised:
+            mission.stage(
+                "QUESTIONS RAISED",
+                f"{len(raised)} follow-up question{'' if len(raised) == 1 else 's'} asked as "
+                f"missions of their own — each has its own answer on the board",
+            )
 
         mission.stage(
             f"ROUND {round_no}",
             f"{added} new source{'' if added == 1 else 's'} from {len(gaps)} follow-up question"
             f"{'' if len(gaps) == 1 else 's'}",
         )
+        return
 
     def _incomplete(self, mission: Mission, reason: str) -> None:
         mission.status = MissionStatus.INCOMPLETE

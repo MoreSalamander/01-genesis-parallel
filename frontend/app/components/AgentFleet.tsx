@@ -16,7 +16,57 @@
    be read off a roster that shows the ones standing down. */
 
 import { useEffect, useState } from "react";
-import { AgentRoster, EventRecord, MissionDetail, getAgents } from "@/lib/api";
+import Link from "next/link";
+import { AgentRoster, EventRecord, MissionDetail, MissionSummary, getAgents, listMissions } from "@/lib/api";
+
+/* The questions this answer raised, each one a mission of its own.
+
+   A follow-up used to be a step buried inside the parent. It is a question, so
+   it gets what a question gets: its own page, its own answer, its own place on
+   the board — labelled as raised rather than passed off as typed. */
+export function RaisedQuestions({ mission }: { mission: MissionDetail }) {
+  const [all, setAll] = useState<MissionSummary[]>([]);
+  useEffect(() => { listMissions().then(setAll).catch(() => setAll([])); }, [mission.id]);
+
+  const children = all.filter((m) => m.raised_by === mission.id);
+  const parent = mission.raised_by ? all.find((m) => m.id === mission.raised_by) : undefined;
+  if (children.length === 0 && !mission.raised_by) return null;
+
+  return (
+    <section className="panel raised">
+      <h2>
+        {children.length > 0 ? "What this answer went on to ask" : "Where this question came from"}
+        {children.length > 0 && (
+          <span className="muted">
+            {" · "}{children.length} question{children.length === 1 ? "" : "s"} it raised for itself,
+            each with its own answer
+          </span>
+        )}
+      </h2>
+
+      {mission.raised_by && (
+        <p className="raised-from">
+          This one was raised while answering{" "}
+          <Link href={`/missions/${mission.raised_by}`}>
+            {parent ? parent.objective : "an earlier question"}
+          </Link>
+          {mission.raised_because && <> — {mission.raised_because}</>}
+        </p>
+      )}
+
+      {children.map((child) => (
+        <Link key={child.id} href={`/missions/${child.id}`} className="raised-row alive-track">
+          <span className="q">{child.objective}</span>
+          <span className="line">
+            <span>{child.sources} sources read</span>
+            {child.verified > 0 && <><span className="sep">·</span><span>{child.verified} confirmed</span></>}
+            {!child.has_recommendation && <><span className="sep">·</span><span className="muted">no answer yet</span></>}
+          </span>
+        </Link>
+      ))}
+    </section>
+  );
+}
 
 const DOMAIN_CLASS: Record<string, string> = {
   market: "d-market", talent: "d-talent", industry: "d-industry", strategic: "d-strategic",

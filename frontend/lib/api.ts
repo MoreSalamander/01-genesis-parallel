@@ -5,7 +5,11 @@ export type VerifyState = "VERIFIED" | "UNVERIFIED" | "CONFLICTED";
 export interface MissionSummary {
   id: string; objective: string; status: string;
   sources: number; claims: number; verified: number; conflicted: number;
-  has_recommendation: boolean; created_at: string; updated_at: string;
+  has_recommendation: boolean;
+  /** Set when the loop raised this question itself. It belongs on the board
+   *  like any other, but must never read as one the Studio Head typed. */
+  raised_by: string; raised_because: string;
+  created_at: string; updated_at: string;
 }
 export interface Stage { name: string; detail: string; at: string }
 export interface Task { id: string; domain: string; focus: string; queries: string[]; specialist: string }
@@ -29,6 +33,7 @@ export interface Recommendation {
 }
 export interface MissionDetail {
   id: string; objective: string; status: string; error: string;
+  raised_by: string; raised_because: string;
   stages: Stage[]; tasks: Task[]; sources: SourceT[]; evidence: EvidenceT[];
   claims: Claim[]; findings: Finding[]; recommendation: Recommendation | null;
   created_at: string; updated_at: string;

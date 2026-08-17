@@ -222,7 +222,12 @@ export default function Board() {
               return (
                 <li key={m.id} style={cascade(i)}>
                   <Link href={`/missions/${m.id}`} className="answer-row alive-track">
-                    <span className="q">{m.objective}</span>
+                    <span className="q">
+                      {/* A question the system raised for itself sits on the
+                          board like any other, and says so. */}
+                      {m.raised_by && <span className="raised-tag">it asked itself</span>}
+                      {m.objective}
+                    </span>
                     <span className="line">
                       <span className={`state ${state.cls}`}>{state.word}</span>
                       <span className="sep">·</span>

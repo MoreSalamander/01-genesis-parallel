@@ -5,7 +5,7 @@ import {
   ACTIVE_STATUSES, EventRecord, MissionDetail,
   decideMission, getEvents, getMission,
 } from "@/lib/api";
-import { AgentFleet } from "../../components/AgentFleet";
+import { AgentFleet, RaisedQuestions } from "../../components/AgentFleet";
 import { GeminiLayer } from "../../components/GeminiLayer";
 import { MissionChip } from "../../components/Chips";
 import { ClaimCards } from "../../components/ClaimCards";
@@ -88,7 +88,10 @@ export default function MissionPage() {
   return (
     <main>
       <header className="answer-head">
-        <div className="asked">you asked</div>
+        {/* Never tell the Studio Head they asked something the system asked
+            itself. The board is allowed to carry both; it is not allowed to
+            confuse them. */}
+        <div className="asked">{mission.raised_by ? "it asked itself" : "you asked"}</div>
         <h1 className="question">{mission.objective}</h1>
         <div className="row" style={{ gap: 12 }}>
           <MissionChip status={mission.status} running={running} />
@@ -165,6 +168,8 @@ export default function MissionPage() {
       )}
 
       <ThinkingPanel mission={mission} events={events} running={running} />
+
+      <RaisedQuestions mission={mission} />
 
       <AgentFleet mission={mission} events={events} running={running} />
 

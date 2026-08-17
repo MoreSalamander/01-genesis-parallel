@@ -33,6 +33,10 @@ def _summary(mission: Mission) -> dict:
         "verified": len(mission.verified_claims),
         "conflicted": len(mission.conflicted_claims),
         "has_recommendation": mission.recommendation is not None,
+        # A question the loop raised is on the board like any other, but the
+        # board must be able to say it was raised rather than asked.
+        "raised_by": mission.raised_by,
+        "raised_because": mission.raised_because,
         "created_at": mission.created_at,
         "updated_at": mission.updated_at,
     }

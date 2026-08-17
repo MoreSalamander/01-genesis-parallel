@@ -141,6 +141,13 @@ class Mission(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     recommendation: Optional[Recommendation] = None
     error: str = ""
+    # A follow-up the loop raised gets its own mission, so it lands on the board
+    # with its own answer the way a typed question does. These say where it came
+    # from, so it is presented as raised rather than passed off as asked — and
+    # they are what stops the recursion: a mission that was itself raised does
+    # not deepen again.
+    raised_by: str = ""
+    raised_because: str = ""
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

@@ -24,6 +24,11 @@ EVENT_NAMES = {
     # for it. Recorded so a follow-up round is visible as a deliberate step
     # rather than as unexplained extra searching.
     "intelligence.gap_found",
+    # …and that follow-up is asked as a mission of its own, so it lands on the
+    # board with its own answer. Carries the id of the mission that raised it,
+    # because a question the system asked itself must never read as one the
+    # Studio Head typed.
+    "intelligence.raised",
     "authorization.decided",
 }
 

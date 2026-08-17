@@ -26,7 +26,15 @@ class ResearchPlanner:
     def __init__(self, cognition: Cognition):
         self.cognition = cognition
 
-    def plan(self, objective: str, studio_context: str) -> list[ResearchTask]:
+    def plan(self, objective: str, studio_context: str, max_tasks: int = 0) -> list[ResearchTask]:
+        """`max_tasks` narrows the plan without narrowing the thinking.
+
+        A follow-up raised by the loop is one specific question, not a fresh
+        objective, and giving it the full eight-task treatment multiplies a
+        metered retrieval bill for ground the parent has already covered. The
+        planner still reasons about the whole question in one call — the plan is
+        simply taken at the width the caller is willing to pay for.
+        """
         raw = self.cognition.generate_json(
             "research_plan", {"objective": objective, "studio_context": studio_context}
         )
@@ -43,7 +51,7 @@ class ResearchPlanner:
             tasks.append(
                 ResearchTask(domain=domain, focus=item.get("focus", objective), queries=queries, specialist=specialist)
             )
-        return tasks
+        return tasks[:max_tasks] if max_tasks > 0 else tasks
 
     @staticmethod
     def _assign_specialist(domain: Domain, focus: str) -> str:

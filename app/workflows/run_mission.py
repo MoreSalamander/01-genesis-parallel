@@ -53,6 +53,10 @@ def get_runtime() -> Runtime:
     from app.knowledge.search import EvidenceSearch
     from app.knowledge.semantic import SemanticMemory
 
+    # One working memory, shared: the executive needs it so a question it raises
+    # is persisted as a mission of its own and reaches the board.
+    from app.memory.durable import get_store
+    working = WorkingMemory(get_store(settings))
     executive = SignalIntelligenceExecutive(
         cognition=cognition,
         parallel_tool=parallel_tool,
@@ -67,12 +71,12 @@ def get_runtime() -> Runtime:
         searcher=EvidenceSearch(settings),
         semantic=SemanticMemory(settings),
         worldgraph=WorldGraph(settings),
+        missions=working,
     )
-    from app.memory.durable import get_store
     from app.memory.ephemeral import get_ephemeral
 
     return Runtime(
-        settings=settings, bus=bus, working=WorkingMemory(get_store(settings)),
+        settings=settings, bus=bus, working=working,
         episodic=episodic, knowledge=knowledge, executive=executive,
         ephemeral=get_ephemeral(settings),
     )

@@ -826,3 +826,25 @@ td.num { font-variant-numeric: tabular-nums; }
   font: 11px/1.5 var(--mono); color: var(--ink-2); white-space: pre-wrap; word-break: break-word;
 }
 .gerror { font-size: 12px; color: var(--warn); margin: 0 0 8px; }
+
+
+/* --- a question the system raised for itself (components/AgentFleet.tsx) ----
+   It sits on the board like any other question, and says plainly that it was
+   raised rather than typed. */
+.raised-tag {
+  display: inline-block; margin-right: 8px; padding: 1px 6px; border-radius: 3px;
+  font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  vertical-align: 1px;
+}
+.raised-from { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); margin: 0 0 10px; }
+.raised-from a { color: var(--accent); }
+.raised-row {
+  display: block; padding: 9px 11px; margin-top: 6px; text-decoration: none; color: inherit;
+  border: 1px solid var(--line); border-left: 2px solid var(--accent);
+  border-radius: 7px; background: var(--surface-2);
+}
+.raised-row:hover { background: color-mix(in srgb, var(--accent) 7%, var(--surface-2)); }
+.raised-row .q { display: block; font-size: 13px; color: var(--ink); }
+.raised-row .line { display: block; margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
+.raised-row .sep { margin: 0 6px; opacity: 0.5; }

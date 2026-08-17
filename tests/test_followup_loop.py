@@ -415,3 +415,78 @@ def test_the_graph_also_offers_leads_and_they_do_not_block_completion():
     assert "like_thing" in kinds, "a peer the studio already tracks was never offered"
     # The chain holds, so the answer is complete even though leads exist.
     assert cov.filled, f"leads must not be counted as shortfalls: {[h.kind for h in cov.holes]}"
+
+
+def test_a_raised_question_becomes_its_own_mission():
+    """A follow-up is a question, and a question belongs on the board with its
+    own answer — the way a typed one does. It must also be marked as raised
+    rather than passed off as asked."""
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+    from app.models.evidence import Domain, ResearchTask, Source
+
+    saved: list = []
+    executive = Executive.__new__(Executive)
+    executive.bus = type("B", (), {"emit": lambda self, *a, **k: None})()
+    executive.knowledge = type("K", (), {"relate": lambda self, *a, **k: None,
+                                         "entities": lambda self: {}})()
+    executive.missions = type("W", (), {"put": lambda self, m: saved.append(m)})()
+    executive.planner = type("P", (), {"plan": lambda self, obj, ctx, max_tasks=0: [
+        ResearchTask(domain=Domain.MARKET, focus=obj, queries=[obj], specialist="Audience Agent")
+    ][:max_tasks or 1]})()
+    executive._research = lambda m: m.sources.append(Source(url="https://e.com/1", title="t"))
+    executive._verify = lambda m: None
+    executive._build_knowledge = lambda m: None
+    executive._synthesize = lambda m: None
+    executive.complete = lambda m: None
+
+    parent = Mission(objective="which faceless niche should we pick?")
+    child = executive._raise_as_mission(parent, {"question": "What is the CPM?", "why": "nothing measures it"}, 2)
+
+    assert child is not None and child.objective == "What is the CPM?"
+    assert child.raised_by == parent.id, "a raised question must say what raised it"
+    assert child.raised_because
+    assert saved and saved[0].id == child.id, "the raised mission never reached the board"
+    assert child.stages[0].name == "RAISED"
+
+
+def test_a_raised_mission_does_not_raise_its_own():
+    """The bound on the tree. Without it every follow-up spawns follow-ups, and
+    each node of that tree is real retrieval against a metered API."""
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+
+    executive = Executive.__new__(Executive)
+    executive.knowledge = type("K", (), {"entities": lambda self: {}})()
+    called: list = []
+    executive._assess_sufficiency = lambda m: called.append("audited") or None
+
+    child = Mission(objective="What is the CPM?", raised_by="msn_parent")
+    executive._deepen(child)
+
+    assert called == [], "a raised mission deepened again — the tree is unbounded"
+    assert child.stages == [], "it should stop silently, not narrate a round it never ran"
+
+
+def test_the_context_decides_how_wide_a_raised_question_runs():
+    """A fixed width is wrong in both directions. "Is this corroborated
+    elsewhere?" is one question, and a wide plan spends most of it re-covering
+    the parent's ground. "What is confirmed about this company nobody looked
+    at?" is a subject, and two queries answer it with exactly the thin answer
+    that raised it. The graph knows which it is."""
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+
+    executive = Executive.__new__(Executive)
+    executive.knowledge = type("K", (), {"entities": lambda self: {
+        "Netflix": {"name": "Netflix", "type": "Company",
+                    "assertions": [{"claim": "x", "status": "VERIFIED"}]},
+    }})()
+
+    # A question about something already held: narrow.
+    assert executive._width_for({"kind": "thin_claim", "where": "clm_1"}) \
+        == Executive.CHILD_TASKS_FOCUSED
+    assert executive._width_for({"kind": "like_thing", "where": "Netflix"}) \
+        == Executive.CHILD_TASKS_FOCUSED, "the studio holds a record here; no need to run wide"
+    # A question about something with nothing behind it: new ground.
+    assert executive._width_for({"kind": "unknown_entity", "where": "Glasshouse Collective"}) \
+        == Executive.CHILD_TASKS_NEW_GROUND
+    # A model-raised gap carries no kind and must not be treated as new ground.
+    assert executive._width_for({"question": "what is the CPM?"}) == Executive.CHILD_TASKS_FOCUSED
