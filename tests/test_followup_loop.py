@@ -263,3 +263,54 @@ def test_a_gap_is_not_asked_twice():
     stages = [s.name for s in mission.stages]
     assert "SAME SHORTFALL" in stages, \
         f"a fully-repeated round must be named rather than silently re-run: {stages}"
+
+
+def test_a_stale_hole_does_not_crowd_out_the_next_question():
+    """The chain is meant to move: each round audits the *new* answer and follows
+    what it raised. Structural holes regenerate identically for a node nothing
+    changed, and the round only carries three of them — so slicing before
+    dropping the already-researched ones let three stale questions fill the round
+    and hide the rest. The loop then stopped, with a question it had never asked
+    still sitting in the audit."""
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+    from app.models.evidence import Source
+
+    researched: list[list[str]] = []
+
+    # Four findings, each resting on an unverified claim: four structural holes,
+    # one more than a single round can carry.
+    claims, findings = [], []
+    for n in range(4):
+        claim = Claim(text=f"unconfirmed thing {n}", entity="X",
+                      status=VerificationStatus.UNVERIFIED, corroborating_sources=1)
+        claims.append(claim)
+        findings.append(Finding(domain=Domain.MARKET, text=f"Act on unconfirmed thing {n}",
+                                claim_ids=[claim.id], strategic_impact=StrategicImpact.HIGH))
+
+    executive = Executive.__new__(Executive)
+    executive.bus = type("B", (), {"emit": lambda self, *a, **k: None})()
+    executive.knowledge = type("K", (), {"relate": lambda self, *a, **k: None})()
+    executive._assess_sufficiency = lambda m: {"fulfilled": False, "reason": "short", "gaps": []}
+
+    def research(mission, gaps, round_no):
+        researched.append([g["question"] for g in gaps])
+        mission.sources.append(Source(url=f"https://example.com/{round_no}", title="new"))
+
+    executive._research_gaps = research
+    executive._verify = lambda m: None
+    executive._build_knowledge = lambda m: None
+    executive._synthesize = lambda m: None
+
+    mission = Mission(objective="which faceless niche should we pick?")
+    mission.claims = claims
+    mission.findings = findings
+    executive._deepen(mission)
+
+    assert len(researched) >= 2, \
+        f"the loop stopped while unasked holes were still open: {researched}"
+    asked_all = [q for round_qs in researched for q in round_qs]
+    assert len(asked_all) == len(set(asked_all)), f"a question was asked twice: {asked_all}"
+    # The point: the round after the first carries questions the first never
+    # asked, rather than the same three holes regenerated.
+    assert not (set(researched[0]) & set(researched[1])), \
+        f"round 3 repeated round 2 instead of advancing: {researched}"

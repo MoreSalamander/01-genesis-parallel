@@ -240,49 +240,66 @@ class SignalIntelligenceExecutive:
                 )
                 return
 
-            # Structural holes first: they name the node that is short, so the
-            # follow-up question is about a specific weak point rather than the
-            # objective at large.
-            gaps: list[dict] = [
-                {"question": hole.as_question(), "why": hole.detail, "where": hole.where}
-                for hole in cov.holes[:3]
-            ]
             if cov.holes:
                 mission.stage(
                     "THIN SUPPORT",
                     f"{len(cov.holes)} place{'' if len(cov.holes) == 1 else 's'} where the chain "
                     f"runs out — {cov.holes[0].detail}",
                 )
+
+            # Each round re-audits the *new* answer, so it should raise the next
+            # question rather than the last one again. Two things stopped it.
+            #
+            # A structural hole regenerates identically for a node nothing has
+            # changed, so slicing the holes before dropping the ones already
+            # researched let three stale questions fill the round and truncate
+            # away the new ones the fresh answer had just raised. Both sources
+            # are filtered against what has been asked *before* anything is
+            # sliced or capped, so the slots go to questions this round earned.
+            already = [
+                q for q in
+                [hole.as_question() for hole in cov.holes]
+                + [g.get("question") for g in ((verdict or {}).get("gaps") or []) if g.get("question")]
+                if q in asked
+            ]
+
+            # Structural holes first: they name the node that is short, so the
+            # follow-up question is about a specific weak point rather than the
+            # objective at large.
+            gaps: list[dict] = [
+                {"question": hole.as_question(), "why": hole.detail, "where": hole.where}
+                for hole in cov.holes if hole.as_question() not in asked
+            ][:3]
             seen_questions = {g["question"] for g in gaps}
             for g in (verdict or {}).get("gaps") or []:
-                if g.get("question") and g["question"] not in seen_questions:
+                question = g.get("question")
+                if question and question not in seen_questions and question not in asked:
                     gaps.append(g)
+                    seen_questions.add(question)
             gaps = gaps[:4]
-            if not gaps:
-                # Not fulfilled, but nothing actionable was named. Returning in
-                # silence here left no trace that the audit had happened at all,
-                # which made a working loop indistinguishable from one that never
-                # ran. Say what the audit found and stop.
-                mission.stage(
-                    "SHORTFALL NOTED",
-                    f"{(verdict or {}).get('reason', 'The answer falls short of the objective.')} "
-                    "No researchable follow-up was identified, so nothing further was attempted.",
-                )
-                return
 
-            repeats = [g for g in gaps if g["question"] in asked]
-            gaps = [g for g in gaps if g["question"] not in asked]
             if not gaps:
-                # Every shortfall named this round was already researched and did
-                # not close. Saying so is the honest end of the loop; asking again
-                # would only spend another round reaching the same place.
-                mission.stage(
-                    "SAME SHORTFALL",
-                    f"{len(repeats)} gap{'' if len(repeats) == 1 else 's'} named again after "
-                    f"round {round_no - 1} researched {'it' if len(repeats) == 1 else 'them'} "
-                    f"without closing {'it' if len(repeats) == 1 else 'them'} — "
-                    f"stated rather than re-asked: {repeats[0]['question'][:110]}",
-                )
+                if already:
+                    # Everything this round named had already been researched and
+                    # did not close. That is the honest end of the chain: another
+                    # round would ask the same corpus the same thing.
+                    mission.stage(
+                        "SAME SHORTFALL",
+                        f"{len(already)} gap{'' if len(already) == 1 else 's'} named again after "
+                        f"round {round_no - 1} researched {'it' if len(already) == 1 else 'them'} "
+                        f"without closing {'it' if len(already) == 1 else 'them'} — "
+                        f"stated rather than re-asked: {already[0][:110]}",
+                    )
+                else:
+                    # Not fulfilled, but nothing actionable was named. Returning in
+                    # silence here left no trace that the audit had happened at all,
+                    # which made a working loop indistinguishable from one that never
+                    # ran. Say what the audit found and stop.
+                    mission.stage(
+                        "SHORTFALL NOTED",
+                        f"{(verdict or {}).get('reason', 'The answer falls short of the objective.')} "
+                        "No researchable follow-up was identified, so nothing further was attempted.",
+                    )
                 return
             asked.update(g["question"] for g in gaps)
 
@@ -290,7 +307,7 @@ class SignalIntelligenceExecutive:
                 "GAPS FOUND",
                 f"{(verdict or {}).get('reason', 'The answer is incomplete.')} "
                 f"Following up on {len(gaps)}: " + "; ".join(g["question"][:70] for g in gaps)
-                + (f" ({len(repeats)} already researched, not re-asked)" if repeats else ""),
+                + (f" ({len(already)} already researched, not re-asked)" if already else ""),
             )
             self.bus.emit(
                 "intelligence.gap_found", mission_id=mission.id, round=round_no,
