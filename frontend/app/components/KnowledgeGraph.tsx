@@ -55,8 +55,10 @@ export interface Forces {
   push: number;      // how hard nodes hold each other off
   spacing: number;   // the distance below which push applies at all
   glow: number;      // how strongly the wires are drawn
+  colour: string;    // and in what colour
 }
-export const DEFAULT_FORCES: Forces = { wire: 250, pull: 0.05, push: 1500, spacing: 90, glow: 0.16 };
+export const DEFAULT_FORCES: Forces =
+  { wire: 250, pull: 0.05, push: 1500, spacing: 90, glow: 0.16, colour: "#c0c6d4" };
 
 /* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
    perspective divide is what makes depth legible at all — without it a rotating
@@ -108,15 +110,26 @@ function build(entities: Record<string, KnowledgeEntity>) {
   for (const name of names) {
     missionsOf.set(name, new Set((entities[name].assertions ?? []).map((a) => a.mission_id)));
   }
-  const edges: [number, number][] = [];
+  /* An edge now carries its weight: how many questions learned about both ends.
+     Eight and a half thousand pairs share at least one, so a tour that walked
+     them in index order would spend its first ten minutes on the accidental ones.
+     Ranked by shared questions, then by how much is known about both ends, the
+     strong connections come first. */
+  const edges: { a: number; b: number; shared: number }[] = [];
   for (let i = 0; i < names.length; i++) {
+    const mine = missionsOf.get(names[i])!;
     for (let j = i + 1; j < names.length; j++) {
-      if ([...missionsOf.get(names[i])!].some((m) => missionsOf.get(names[j])!.has(m))) {
-        edges.push([i, j]);
-      }
+      let shared = 0;
+      for (const m of mine) if (missionsOf.get(names[j])!.has(m)) shared++;
+      if (shared > 0) edges.push({ a: i, b: j, shared });
     }
   }
-  return { nodes, edges };
+  const tour = [...edges.keys()].sort((x, y) => {
+    const e = edges[x], f = edges[y];
+    if (f.shared !== e.shared) return f.shared - e.shared;
+    return (nodes[f.a].claims + nodes[f.b].claims) - (nodes[e.a].claims + nodes[e.b].claims);
+  });
+  return { nodes, edges, tour };
 }
 
 /* One tick of the model, run every frame rather than once up front, so moving a
@@ -178,6 +191,8 @@ function step(nodes: Node[], f: Forces): number {
    its place across reloads and across new arrivals. */
 /* Average per-node movement below which the model is considered arrived. */
 const REST = 0.05;
+/* Two seconds a connection, as asked: long enough to read both names. */
+const TOUR_MS = 2000;
 const LAYOUT_KEY = "genesis.graph.layout";
 const FORCES_KEY = "genesis.graph.forces";
 
@@ -216,6 +231,16 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   const drawRef = useRef<(() => void) | null>(null);
   const stepRef = useRef<((ticks: number) => void) | null>(null);
   const settledRef = useRef(false);
+  /* The tour. One connection held for two seconds, then the next — a way to read
+     eight thousand relationships one at a time instead of as a mat of line. It
+     runs on its own timer rather than the animation loop, so it works with
+     reduced motion and in a background tab, and it drives the same highlight
+     that hovering does. */
+  const tourRef = useRef<{ order: number[]; at: number; of: string | null } | null>(null);
+  const tourEdgeRef = useRef<{ a: number; b: number; shared: number } | null>(null);
+  const [touring, setTouring] = useState(false);
+  const [tourAt, setTourAt] = useState<
+    { i: number; of: number; a: string; b: string; shared: number; anchored: boolean } | null>(null);
   // Rotation lives in refs for the same reason hover does: as state it would
   // re-run the effect and re-settle 260 ticks of O(n²) repulsion on every
   // mouse move of a drag.
@@ -227,6 +252,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   // Forces in a ref, mirrored into state only so the sliders can show their own
   // values: as a dependency they would tear down and rebuild the model on every
   // pixel of a drag.
+  const tourStepRef = useRef<((restart: boolean) => void) | null>(null);
   const forcesRef = useRef<Forces>({ ...DEFAULT_FORCES });
   const [forces, setForces] = useState<Forces>({ ...DEFAULT_FORCES });
   // Tuning is part of the arrangement, so it is remembered with it. Read after
@@ -242,13 +268,13 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       stepRef.current?.(60);
     } catch { /* the defaults stand */ }
   }, []);
-  const setForce = (key: keyof Forces, value: number) => {
+  const setForce = (key: keyof Forces, value: number | string) => {
     forcesRef.current = { ...forcesRef.current, [key]: value };
     setForces(forcesRef.current);
     try { localStorage.setItem(FORCES_KEY, JSON.stringify(forcesRef.current)); } catch { /* ignore */ }
     // A repaint is enough for a paint-only setting; the rest need the model to
     // move, and stepping when nothing has to move would jog a settled layout.
-    if (key === "glow") { drawRef.current?.(); return; }
+    if (key === "glow" || key === "colour") { drawRef.current?.(); return; }
     // Settle and repaint on the spot rather than waiting for the animation loop.
     // The loop is not always there: reduced motion has none at all, and a
     // background tab has requestAnimationFrame suspended — in both cases the
@@ -306,8 +332,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const { nodes, edges } = build(entities);
+    const { nodes, edges, tour } = build(entities);
     nodesRef.current = nodes;
+    tourRef.current = { order: tour, at: -1, of: null };
     const css = getComputedStyle(canvas);
     const accent = css.getPropertyValue("--accent").trim() || "#3987e5";
     const warn = css.getPropertyValue("--warn").trim() || "#fab219";
@@ -330,9 +357,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       const focus = hoveredRef.current ?? sel;
       const near = new Set<string>();
       if (focus) {
-        for (const [i, j] of edges) {
-          if (nodes[i].id === focus) near.add(nodes[j].id);
-          if (nodes[j].id === focus) near.add(nodes[i].id);
+        for (const e of edges) {
+          if (nodes[e.a].id === focus) near.add(nodes[e.b].id);
+          if (nodes[e.b].id === focus) near.add(nodes[e.a].id);
         }
       }
       ctx.clearRect(0, 0, W, H);
@@ -349,7 +376,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       const fade = (n: Node) => 0.45 + 0.55 * (1 - Math.min(1, ((n.depth ?? 0) + DEPTH) / (DEPTH * 2)));
       // 390 edges across 106 nodes drawn at full strength is a grey mat that
       // buries the nodes. They are context, so they sit back until you point.
-      for (const [i, j] of edges) {
+      for (const { a: i, b: j } of edges) {
         const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
         ctx.strokeStyle = lit ? accent : line;
         ctx.lineWidth = lit ? 1.6 : 1;
@@ -373,7 +400,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       ctx.lineWidth = 1;
       for (const n of order) {
         const lit = focus !== null && n.id === focus;
-        ctx.strokeStyle = lit ? accent : ink;
+        ctx.strokeStyle = lit ? accent : (forcesRef.current.colour || ink);
         ctx.globalAlpha = (lit ? 0.9 : forcesRef.current.glow) * fade(n);
         ctx.beginPath();
         ctx.moveTo(anchor.sx, anchor.sy);
@@ -386,9 +413,22 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       ctx.arc(anchor.sx, anchor.sy, 3.5 * anchor.k, 0, Math.PI * 2);
       ctx.fillStyle = ink; ctx.fill();
 
+      // The toured connection, drawn over everything so it reads through the mat.
+      const te = tourEdgeRef.current;
+      if (te) {
+        const a = nodes[te.a], b = nodes[te.b];
+        ctx.strokeStyle = warn; ctx.lineWidth = 2.5; ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.moveTo(a.sx!, a.sy!); ctx.lineTo(b.sx!, b.sy!); ctx.stroke();
+        for (const end of [a, b]) {
+          ctx.beginPath(); ctx.arc(end.sx!, end.sy!, end.sr! + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = warn; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.9; ctx.stroke();
+        }
+      }
+
       ctx.globalAlpha = 1;
       for (const n of order) {
-        const on = n.id === sel || n.id === focus;
+        const on = n.id === sel || n.id === focus
+          || (te ? (nodes[te.a].id === n.id || nodes[te.b].id === n.id) : false);
         const related = focus !== null && (n.id === focus || near.has(n.id));
         // Most entities are known from a single fact. They stay on the board —
         // hiding them would misrepresent how much is thinly sourced — but they
@@ -406,7 +446,8 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
           ctx.strokeStyle = colour; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.stroke();
           ctx.globalAlpha = 1;
         }
-        if (labelled.has(n.id) || related) {
+        const onTour = te ? (nodes[te.a].id === n.id || nodes[te.b].id === n.id) : false;
+        if (labelled.has(n.id) || related || onTour) {
           ctx.fillStyle = on ? css.getPropertyValue("--ink").trim() || "#fff" : ink;
           ctx.font = `${on ? "600 " : ""}15px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = "center";
@@ -438,6 +479,40 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       saveLayout(nodes);
     };
     stepRef.current = (ticks: number) => { settledRef.current = false; advance(ticks); };
+    // Advance the tour by one connection and repaint. Kept here because it needs
+    // the built edges, which never leave this effect.
+    tourStepRef.current = (restart: boolean) => {
+      const t = tourRef.current;
+      if (!t) return;
+      if (restart) {
+        // The tour walks the selected node's own connections. Clicking a
+        // different node re-aims it, which is the whole point: eight thousand
+        // pairs is a mat, but one company's twenty-seven neighbours read one at a
+        // time. With nothing selected it walks the strongest connections in the
+        // graph instead.
+        const focus = selectedRef.current;
+        t.order = focus === null
+          ? tour
+          : [...edges.keys()]
+              .filter((k) => nodes[edges[k].a].id === focus || nodes[edges[k].b].id === focus)
+              .sort((x, y) => edges[y].shared - edges[x].shared);
+        t.at = -1;
+        t.of = focus;
+      }
+      if (t.order.length === 0) { tourEdgeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
+      t.at = (t.at + 1) % t.order.length;
+      const edge = edges[t.order[t.at]];
+      tourEdgeRef.current = edge;
+      // Read out from the selected end, so the pair is stated in the direction
+      // the Studio Head is looking.
+      const from = t.of === nodes[edge.b].id ? nodes[edge.b] : nodes[edge.a];
+      const to = from.id === nodes[edge.a].id ? nodes[edge.b] : nodes[edge.a];
+      setTourAt({
+        i: t.at + 1, of: t.order.length,
+        a: from.id, b: to.id, shared: edge.shared, anchored: t.of !== null,
+      });
+      drawRef.current?.();
+    };
     advance(90);
     drawRef.current = draw;
     draw();
@@ -483,6 +558,13 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     selectedRef.current = selected;
     drawRef.current?.();
   }, [selected, hoverName]);
+
+  useEffect(() => {
+    if (!touring) { tourEdgeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
+    tourStepRef.current?.(true);                   // aim it, and show one at once
+    const timer = setInterval(() => tourStepRef.current?.(false), TOUR_MS);
+    return () => clearInterval(timer);
+  }, [touring, selected]);
 
   // Map a click in CSS pixels onto the canvas's logical coordinate space, since
   // the canvas is laid out responsively rather than at its intrinsic size.
@@ -610,6 +692,21 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               <input type="range" min={0.02} max={0.7} step={0.02} value={forces.glow}
                      onChange={(e) => setForce("glow", Number(e.target.value))} />
             </label>
+            <label className="gf-colour">
+              <span>wire colour<b>{forces.colour}</b></span>
+              <input type="color" value={forces.colour}
+                     onChange={(e) => setForce("colour", e.target.value)} />
+            </label>
+            <button className={`gf-tour${touring ? " on" : ""}`}
+                    onClick={() => setTouring((t) => !t)}
+                    aria-pressed={touring}
+                    title={selected
+                      ? `Walk everything ${selected} connects to, two seconds each`
+                      : "Walk the strongest connections in the graph — click a node first to walk only its own"}>
+              {touring
+                ? "◼ stop tour"
+                : selected ? `▶ tour ${selected.length > 16 ? "this node" : selected}` : "▶ tour connections"}
+            </button>
             <button className="gf-reset" onClick={() => {
               forcesRef.current = { ...DEFAULT_FORCES };
               setForces(forcesRef.current);
@@ -620,6 +717,18 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               stepRef.current?.(120);
             }}>reset</button>
           </div>
+
+          {touring && tourAt && (
+            <p className="graph-tour" aria-live="polite">
+              <span className="gt-count">{tourAt.i} of {tourAt.of.toLocaleString()}</span>
+              <b>{tourAt.a}</b> {tourAt.anchored ? "→" : "and"} <b>{tourAt.b}</b>
+              <span className="gt-why">
+                {tourAt.shared === 1
+                  ? "one question learned about both"
+                  : `${tourAt.shared} questions learned about both`}
+              </span>
+            </p>
+          )}
 
           <p className="graph-legend">
             It turns on its own, and <b>you can drag it</b> — pointing at anything stops it so you
