@@ -124,12 +124,14 @@ function build(entities: Record<string, KnowledgeEntity>) {
       if (shared > 0) edges.push({ a: i, b: j, shared });
     }
   }
+  const degree = new Array(names.length).fill(0);
+  for (const e of edges) { degree[e.a]++; degree[e.b]++; }
   const tour = [...edges.keys()].sort((x, y) => {
     const e = edges[x], f = edges[y];
     if (f.shared !== e.shared) return f.shared - e.shared;
     return (nodes[f.a].claims + nodes[f.b].claims) - (nodes[e.a].claims + nodes[e.b].claims);
   });
-  return { nodes, edges, tour };
+  return { nodes, edges, tour, degree };
 }
 
 /* One tick of the model, run every frame rather than once up front, so moving a
@@ -236,11 +238,11 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
      runs on its own timer rather than the animation loop, so it works with
      reduced motion and in a background tab, and it drives the same highlight
      that hovering does. */
-  const tourRef = useRef<{ order: number[]; at: number; of: string | null } | null>(null);
-  const tourEdgeRef = useRef<{ a: number; b: number; shared: number } | null>(null);
+  const tourRef = useRef<{ order: number[]; at: number } | null>(null);
+  const tourNodeRef = useRef<string | null>(null);
   const [touring, setTouring] = useState(false);
   const [tourAt, setTourAt] = useState<
-    { i: number; of: number; a: string; b: string; shared: number; anchored: boolean } | null>(null);
+    { i: number; of: number; name: string; links: number; claims: number } | null>(null);
   // Rotation lives in refs for the same reason hover does: as state it would
   // re-run the effect and re-settle 260 ticks of O(n²) repulsion on every
   // mouse move of a drag.
@@ -332,9 +334,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const { nodes, edges, tour } = build(entities);
+    const { nodes, edges, degree } = build(entities);
     nodesRef.current = nodes;
-    tourRef.current = { order: tour, at: -1, of: null };
+    tourRef.current = { order: [], at: -1 };
     const css = getComputedStyle(canvas);
     const accent = css.getPropertyValue("--accent").trim() || "#3987e5";
     const warn = css.getPropertyValue("--warn").trim() || "#fab219";
@@ -354,7 +356,10 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     const draw = () => {
       // Recomputed each frame so hover responds without restarting the layout.
       const sel = selectedRef.current;
-      const focus = hoveredRef.current ?? sel;
+      // A toured node is a focus like any other, which is what lights its whole
+      // fan: the edge and neighbour highlighting below is the same code hovering
+      // uses, so the tour did not need a second way of drawing anything.
+      const focus = hoveredRef.current ?? tourNodeRef.current ?? sel;
       const near = new Set<string>();
       if (focus) {
         for (const e of edges) {
@@ -413,22 +418,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       ctx.arc(anchor.sx, anchor.sy, 3.5 * anchor.k, 0, Math.PI * 2);
       ctx.fillStyle = ink; ctx.fill();
 
-      // The toured connection, drawn over everything so it reads through the mat.
-      const te = tourEdgeRef.current;
-      if (te) {
-        const a = nodes[te.a], b = nodes[te.b];
-        ctx.strokeStyle = warn; ctx.lineWidth = 2.5; ctx.globalAlpha = 1;
-        ctx.beginPath(); ctx.moveTo(a.sx!, a.sy!); ctx.lineTo(b.sx!, b.sy!); ctx.stroke();
-        for (const end of [a, b]) {
-          ctx.beginPath(); ctx.arc(end.sx!, end.sy!, end.sr! + 5, 0, Math.PI * 2);
-          ctx.strokeStyle = warn; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.9; ctx.stroke();
-        }
-      }
-
       ctx.globalAlpha = 1;
       for (const n of order) {
-        const on = n.id === sel || n.id === focus
-          || (te ? (nodes[te.a].id === n.id || nodes[te.b].id === n.id) : false);
+        const on = n.id === sel || n.id === focus;
         const related = focus !== null && (n.id === focus || near.has(n.id));
         // Most entities are known from a single fact. They stay on the board —
         // hiding them would misrepresent how much is thinly sourced — but they
@@ -446,8 +438,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
           ctx.strokeStyle = colour; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.stroke();
           ctx.globalAlpha = 1;
         }
-        const onTour = te ? (nodes[te.a].id === n.id || nodes[te.b].id === n.id) : false;
-        if (labelled.has(n.id) || related || onTour) {
+        // A neighbour of the toured node is named while it holds the frame, so a
+        // fan can be read rather than just seen.
+        if (labelled.has(n.id) || related) {
           ctx.fillStyle = on ? css.getPropertyValue("--ink").trim() || "#fff" : ink;
           ctx.font = `${on ? "600 " : ""}15px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = "center";
@@ -481,35 +474,38 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     stepRef.current = (ticks: number) => { settledRef.current = false; advance(ticks); };
     // Advance the tour by one connection and repaint. Kept here because it needs
     // the built edges, which never leave this effect.
+    /* The tour steps over nodes, not over edges. One node holds the frame with
+       every connection it has lit at once — its whole fan — and then the next node
+       takes it. Walking edge by edge said one relationship at a time and never
+       showed a shape; a fan says "this is what this company sits inside", which is
+       the thing worth two seconds.
+
+       Most-connected first, because that is the order in which the graph is worth
+       explaining. */
+    const connected = nodes
+      .map((n, i) => i)
+      .filter((i) => degree[i] > 0)
+      .sort((x, y) => degree[y] - degree[x]);
+
     tourStepRef.current = (restart: boolean) => {
       const t = tourRef.current;
       if (!t) return;
       if (restart) {
-        // The tour walks the selected node's own connections. Clicking a
-        // different node re-aims it, which is the whole point: eight thousand
-        // pairs is a mat, but one company's twenty-seven neighbours read one at a
-        // time. With nothing selected it walks the strongest connections in the
-        // graph instead.
-        const focus = selectedRef.current;
-        t.order = focus === null
-          ? tour
-          : [...edges.keys()]
-              .filter((k) => nodes[edges[k].a].id === focus || nodes[edges[k].b].id === focus)
-              .sort((x, y) => edges[y].shared - edges[x].shared);
-        t.at = -1;
-        t.of = focus;
+        t.order = connected;
+        // Start from the selected node if there is one, so clicking something and
+        // starting the tour begins where you were looking rather than jumping.
+        const from = selectedRef.current === null
+          ? -1
+          : connected.findIndex((i) => nodes[i].id === selectedRef.current);
+        t.at = from;
       }
-      if (t.order.length === 0) { tourEdgeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
+      if (t.order.length === 0) { tourNodeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
       t.at = (t.at + 1) % t.order.length;
-      const edge = edges[t.order[t.at]];
-      tourEdgeRef.current = edge;
-      // Read out from the selected end, so the pair is stated in the direction
-      // the Studio Head is looking.
-      const from = t.of === nodes[edge.b].id ? nodes[edge.b] : nodes[edge.a];
-      const to = from.id === nodes[edge.a].id ? nodes[edge.b] : nodes[edge.a];
+      const node = nodes[t.order[t.at]];
+      tourNodeRef.current = node.id;
       setTourAt({
         i: t.at + 1, of: t.order.length,
-        a: from.id, b: to.id, shared: edge.shared, anchored: t.of !== null,
+        name: node.id, links: degree[t.order[t.at]], claims: node.claims,
       });
       drawRef.current?.();
     };
@@ -560,7 +556,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   }, [selected, hoverName]);
 
   useEffect(() => {
-    if (!touring) { tourEdgeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
+    if (!touring) { tourNodeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
     tourStepRef.current?.(true);                   // aim it, and show one at once
     const timer = setInterval(() => tourStepRef.current?.(false), TOUR_MS);
     return () => clearInterval(timer);
@@ -700,12 +696,8 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
             <button className={`gf-tour${touring ? " on" : ""}`}
                     onClick={() => setTouring((t) => !t)}
                     aria-pressed={touring}
-                    title={selected
-                      ? `Walk everything ${selected} connects to, two seconds each`
-                      : "Walk the strongest connections in the graph — click a node first to walk only its own"}>
-              {touring
-                ? "◼ stop tour"
-                : selected ? `▶ tour ${selected.length > 16 ? "this node" : selected}` : "▶ tour connections"}
+                    title="Hold each connected entity for two seconds with all of its connections lit, most connected first">
+              {touring ? "◼ stop cycling" : "▶ cycle connections"}
             </button>
             <button className="gf-reset" onClick={() => {
               forcesRef.current = { ...DEFAULT_FORCES };
@@ -721,11 +713,11 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
           {touring && tourAt && (
             <p className="graph-tour" aria-live="polite">
               <span className="gt-count">{tourAt.i} of {tourAt.of.toLocaleString()}</span>
-              <b>{tourAt.a}</b> {tourAt.anchored ? "→" : "and"} <b>{tourAt.b}</b>
+              <b>{tourAt.name}</b>
               <span className="gt-why">
-                {tourAt.shared === 1
-                  ? "one question learned about both"
-                  : `${tourAt.shared} questions learned about both`}
+                {tourAt.links} connection{tourAt.links === 1 ? "" : "s"}
+                {" · "}
+                {tourAt.claims} thing{tourAt.claims === 1 ? "" : "s"} known
               </span>
             </p>
           )}
