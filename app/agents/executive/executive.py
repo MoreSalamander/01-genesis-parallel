@@ -200,6 +200,10 @@ class SignalIntelligenceExecutive:
     # research question, research those, and re-synthesize with the new
     # evidence folded in.
     MAX_ROUNDS = 3
+    # How wide one answer fans out. Every question here is a real retrieval call
+    # against a metered API, so the width is a cost decision, not a taste one.
+    HOLES_PER_ROUND = 3      # structural holes, rotated across kinds
+    GAPS_PER_ROUND = 4       # those plus whatever the model raised
 
     def _deepen(self, mission: Mission) -> None:
         from app.knowledge import coverage
@@ -227,7 +231,7 @@ class SignalIntelligenceExecutive:
             #
             # Neither alone is enough, so the loop runs on both, and stops only
             # when the structure holds *and* the objective is met.
-            cov = coverage.assess(mission)
+            cov = coverage.assess(mission, self.knowledge)
             verdict = self._assess_sufficiency(mission)
 
             if verdict is None and cov.filled:
@@ -266,17 +270,33 @@ class SignalIntelligenceExecutive:
             # Structural holes first: they name the node that is short, so the
             # follow-up question is about a specific weak point rather than the
             # objective at large.
+            #
+            # Taken in order they arrive, a round fills with three unsupported
+            # findings — three versions of one question. Rotating through the
+            # kinds instead spends the round on an unsupported finding, a claim
+            # only one page made, and a company nothing is confirmed about: one
+            # answer fanning out into different directions, which is the whole
+            # point of auditing against the graph.
+            fresh: dict[str, list] = {}
+            for hole in cov.holes:
+                if hole.as_question() not in asked:
+                    fresh.setdefault(hole.kind, []).append(hole)
+            spread = []
+            while len(spread) < self.HOLES_PER_ROUND and any(fresh.values()):
+                for queue in fresh.values():
+                    if queue and len(spread) < self.HOLES_PER_ROUND:
+                        spread.append(queue.pop(0))
             gaps: list[dict] = [
                 {"question": hole.as_question(), "why": hole.detail, "where": hole.where}
-                for hole in cov.holes if hole.as_question() not in asked
-            ][:3]
+                for hole in spread
+            ]
             seen_questions = {g["question"] for g in gaps}
             for g in (verdict or {}).get("gaps") or []:
                 question = g.get("question")
                 if question and question not in seen_questions and question not in asked:
                     gaps.append(g)
                     seen_questions.add(question)
-            gaps = gaps[:4]
+            gaps = gaps[:self.GAPS_PER_ROUND]
 
             if not gaps:
                 if already:

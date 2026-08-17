@@ -314,3 +314,104 @@ def test_a_stale_hole_does_not_crowd_out_the_next_question():
     # asked, rather than the same three holes regenerated.
     assert not (set(researched[0]) & set(researched[1])), \
         f"round 3 repeated round 2 instead of advancing: {researched}"
+
+
+def test_the_graph_turns_one_answer_into_questions_about_different_things():
+    """One answer should fan out. Read against the context graph it raises an
+    unsupported finding, a claim only one page made, and a company the studio
+    has nothing confirmed about — three directions, not one question three
+    times. The entity half was described in coverage.py's own docstring and
+    listed in Hole.kind from the start, but nothing ever emitted it: assess()
+    had no handle on the graph to ask."""
+    claim = Claim(text="Halcyon Ventures led the round", entity="Halcyon Ventures",
+                  status=VerificationStatus.UNVERIFIED, corroborating_sources=1)
+    finding = Finding(domain=Domain.MARKET, text="Back the Halcyon-led slate",
+                      claim_ids=[claim.id], strategic_impact=StrategicImpact.HIGH)
+    mission = _mission_with([claim], [finding])
+
+    # Nothing confirmed about the entity the answer leans on.
+    empty_graph = type("G", (), {"entities": lambda self: {}})()
+    kinds = {h.kind for h in coverage.assess(mission, empty_graph).holes}
+    assert "unknown_entity" in kinds, "the graph was not asked what the studio knows"
+    assert len(kinds) >= 2, f"one answer should raise different kinds of question: {kinds}"
+
+    # And it must not manufacture work: an entity with a verified assertion is
+    # not a hole, and the mission-only audit still works with no graph at all.
+    known_graph = type("G", (), {"entities": lambda self: {
+        "Halcyon Ventures": {"assertions": [{"claim": "led the round", "status": "VERIFIED"}]}}})()
+    assert not [h for h in coverage.assess(mission, known_graph).holes if h.kind == "unknown_entity"]
+    assert "unknown_entity" not in {h.kind for h in coverage.assess(mission).holes}
+
+
+def test_a_round_spends_itself_on_different_kinds_of_hole():
+    """Taken in arrival order a round fills with three unsupported findings —
+    the same question three times, and the reason a stale hole could stall the
+    loop. The round rotates through the kinds instead."""
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+    from app.models.evidence import Source
+
+    researched: list[list[str]] = []
+    claims, findings = [], []
+    for n in range(3):
+        c = Claim(text=f"thing {n}", entity=f"Company {n}",
+                  status=VerificationStatus.UNVERIFIED, corroborating_sources=1)
+        claims.append(c)
+        findings.append(Finding(domain=Domain.MARKET, text=f"Act on thing {n}",
+                                claim_ids=[c.id], strategic_impact=StrategicImpact.HIGH))
+
+    executive = Executive.__new__(Executive)
+    executive.bus = type("B", (), {"emit": lambda self, *a, **k: None})()
+    executive.knowledge = type("K", (), {"relate": lambda self, *a, **k: None,
+                                         "entities": lambda self: {}})()
+    executive._assess_sufficiency = lambda m: {"fulfilled": False, "reason": "short", "gaps": []}
+
+    def research(mission, gaps, round_no):
+        researched.append([g["question"] for g in gaps])
+        mission.sources.append(Source(url=f"https://example.com/{round_no}", title="new"))
+
+    executive._research_gaps = research
+    executive._verify = lambda m: None
+    executive._build_knowledge = lambda m: None
+    executive._synthesize = lambda m: None
+
+    mission = Mission(objective="who should we back?")
+    mission.claims = claims
+    mission.findings = findings
+    executive._deepen(mission)
+
+    first = researched[0]
+    assert len(first) == 3
+    # Three different shapes of question, not three of one.
+    assert len({q.split(":")[0] for q in first}) >= 2, \
+        f"the round spent itself on one kind of question: {first}"
+
+
+def test_the_graph_also_offers_leads_and_they_do_not_block_completion():
+    """Not every follow-up is a defect. After an answer lands, a researcher looks
+    at the like things and continues the thread that is still open — so the graph
+    offers peers it already tracks in the same category, and disagreements its
+    own record is holding. These must never count as shortfalls: an answer is not
+    incomplete because more could always be asked, and treating leads as holes
+    would mean no mission ever finished while a metered API ran."""
+    claim = Claim(text="Halcyon led the round", entity="Halcyon Ventures",
+                  status=VerificationStatus.VERIFIED, corroborating_sources=3)
+    finding = Finding(domain=Domain.MARKET, text="Back it", claim_ids=[claim.id],
+                      strategic_impact=StrategicImpact.LOW)
+    rec = Recommendation(mission_id="m", action="do it", rationale="because",
+                         confidence=0.8, finding_ids=[finding.id])
+    mission = _mission_with([claim], [finding], rec)
+
+    graph = type("G", (), {"entities": lambda self: {
+        "Halcyon Ventures": {"name": "Halcyon Ventures", "type": "Company",
+                             "assertions": [{"claim": "led a $40M round", "status": "CONFLICTED",
+                                             "disputed": True}]},
+        "Glasshouse Collective": {"name": "Glasshouse Collective", "type": "Company",
+                                  "assertions": [{"claim": "x", "status": "VERIFIED"}]},
+    }})()
+    cov = coverage.assess(mission, graph)
+
+    kinds = {lead.kind for lead in cov.leads}
+    assert "open_dispute" in kinds, "the record disagrees with itself and nothing asked why"
+    assert "like_thing" in kinds, "a peer the studio already tracks was never offered"
+    # The chain holds, so the answer is complete even though leads exist.
+    assert cov.filled, f"leads must not be counted as shortfalls: {[h.kind for h in cov.holes]}"
