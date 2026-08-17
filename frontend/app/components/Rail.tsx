@@ -22,7 +22,7 @@ export function Rail() {
       listMissions().then(setMissions).catch(() => {});
       // Read from the graph, not from missions carrying raised_by: a question is
       // recorded when it is raised, and only some are dispatched as missions.
-      getNestedQuestions(12).then(setNested).catch(() => {});
+      getNestedQuestions(40).then(setNested).catch(() => {});
     };
     load();
     const timer = setInterval(load, 2000);
@@ -36,6 +36,12 @@ export function Rail() {
   // recommendation but is finished — counting it as working left dead missions
   // "in flight" for days.
   const open = missions.filter((m) => ACTIVE_STATUSES.has(m.status)).length;
+
+  // A nested question is in the tracker only while it is genuinely being
+  // researched. Finished ones clear: they are on the board like any other
+  // question, so keeping them here too would make this an archive of things
+  // that already happened.
+  const inFlight = nested.filter((q) => q.status === "working");
 
   const vitals = [
     { label: "answers", value: missions.length },
@@ -74,29 +80,28 @@ export function Rail() {
           what is thin, and each shortfall going off to be researched as a
           question of its own. In flight first, because that is the part that
           changes while you watch. */}
+      {/* Only the ones being worked on. A finished nested question clears from
+          here and lives on the board with every other question — this slot is a
+          tracker, not an archive, so what is in it is what is happening. */}
       <div className="rail-block">
         <div className="rail-head">nested questions</div>
-        {nested.length === 0 && (
+        {inFlight.length === 0 && (
           <div className="rail-empty">
-            {missions.length === 0
-              ? "nothing asked yet"
-              : "none yet — an answer that leaves something thin raises one here"}
+            nothing being worked on — when an answer leaves something thin, the question it
+            raises appears here while it is researched
           </div>
         )}
-        {nested.map((q, i) => {
-          // Where the question goes when clicked: its own answer if it was
-          // dispatched as a mission, otherwise the answer it was raised from,
-          // which is where its research actually landed.
-          const href = `/missions/${q.answered_by || q.raised_by}`;
+        {inFlight.map((q, i) => {
+          const href = `/missions/${q.answered_by}`;
           return (
             <Link
               href={href}
               key={`${q.question}-${i}`}
-              className={`rail-item nested alive-track${path === href ? " on" : ""}`}
+              className={`rail-item nested working alive-track${path === href ? " on" : ""}`}
             >
               <span className="q">{q.question}</span>
               <span className="s">
-                {q.status === "answered" ? "answered on its own" : "folded into the answer"}
+                <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
                 {q.raised_by_objective && <span className="from">from: {q.raised_by_objective}</span>}
               </span>
             </Link>

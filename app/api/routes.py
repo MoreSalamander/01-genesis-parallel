@@ -176,17 +176,26 @@ def nested_questions(limit: int = 40) -> list[dict]:
     a mission of its own. Looking only for dispatched ones is why the tracker read
     "none yet" while sixty-four sat in the store.
     """
+    from app.models.evidence import MissionStatus
+
+    working_states = {MissionStatus.PLANNED, MissionStatus.RESEARCHING,
+                      MissionStatus.VERIFYING, MissionStatus.SYNTHESIZING}
     runtime = get_runtime()
-    objectives = {m.id: m.objective for m in runtime.working.all()}
+    missions = {m.id: m for m in runtime.working.all()}
     out = []
     for item in runtime.knowledge.nested_questions(limit):
-        answered = item["answered_by"]
+        child = missions.get(item["answered_by"])
+        parent = missions.get(item["raised_by"])
+        if child is not None and child.status in working_states:
+            status = "working"          # in flight right now
+        elif child is not None:
+            status = "answered"         # dispatched, and finished
+        else:
+            status = "folded"           # researched into the answer that raised it
         out.append({
             **item,
-            "raised_by_objective": objectives.get(item["raised_by"], ""),
-            # Present only when the question was dispatched as its own mission;
-            # the rest had their research folded into the answer that raised them.
-            "status": (objectives.get(answered) and "answered") or ("answered" if answered else "folded"),
+            "raised_by_objective": parent.objective if parent else "",
+            "status": status,
         })
     return out
 

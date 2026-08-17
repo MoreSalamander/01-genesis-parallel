@@ -124,7 +124,9 @@ export interface NestedQuestion {
   raised_by: string;
   raised_by_objective: string;
   answered_by: string;
-  status: "answered" | "folded";
+  /** working = dispatched and in flight · answered = dispatched and finished ·
+   *  folded = researched into the answer that raised it, no mission of its own */
+  status: "working" | "answered" | "folded";
 }
 export const getNestedQuestions = (limit = 40) =>
   api<NestedQuestion[]>(`/api/nested-questions?limit=${limit}`);

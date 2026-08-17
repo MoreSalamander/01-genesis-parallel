@@ -593,3 +593,31 @@ def test_nested_questions_are_read_from_the_graph_not_from_dispatched_missions(t
     assert found[0]["answered_by"] == "msn_child", "a dispatched question must link to its own answer"
     assert found[1]["answered_by"] == "", "a folded question has no mission of its own, and must not invent one"
     assert all(q["raised_by"] == "msn_parent" for q in found)
+
+
+def test_the_tracker_shows_only_what_is_being_worked_on():
+    """The rail is a tracker, not an archive. A nested question belongs in it
+    while it is being researched and must clear when it finishes — it is on the
+    board with every other question by then, so keeping it would make the slot a
+    list of things that already happened.
+
+    Three states, and the difference matters: dispatched-and-running, dispatched-
+    and-finished, and folded into the answer that raised it (no mission at all,
+    so nothing to track)."""
+    from app.models.evidence import MissionStatus
+
+    working_states = {MissionStatus.PLANNED, MissionStatus.RESEARCHING,
+                      MissionStatus.VERIFYING, MissionStatus.SYNTHESIZING}
+
+    running = Mission(objective="What is the CPM?", raised_by="msn_parent")
+    running.status = MissionStatus.RESEARCHING
+    done = Mission(objective="Who confirms it?", raised_by="msn_parent")
+    done.status = MissionStatus.RECOMMENDED
+
+    assert running.status in working_states, "a researching nested question must be trackable"
+    assert done.status not in working_states, "a finished one must clear from the tracker"
+    # INCOMPLETE is finished, not working: a dead mission must not sit in the
+    # tracker forever claiming to be in flight.
+    dead = Mission(objective="Unanswerable?", raised_by="msn_parent")
+    dead.status = MissionStatus.INCOMPLETE
+    assert dead.status not in working_states

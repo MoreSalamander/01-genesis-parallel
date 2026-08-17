@@ -1,17 +1,17 @@
 "use client";
-/* Nested questions: the answers, and the questions those answers raised.
+/* Every question asked, in one list — typed or nested.
 
-   This replaces a flat list of everything asked, which said no more than the
-   ask box already implied. What is worth watching is the nesting — an answer
-   gets audited against the context graph, the graph names what is thin, and each
-   shortfall becomes a question of its own that goes and gets researched. That is
-   the system extending its own enquiry, and it happened invisibly on a list that
-   treated every row as unrelated.
+   A nested question is a question: the system raised it from its own answer, went
+   and researched it, and has an answer for it. So it gets a row here and a page
+   of its own, exactly like one you typed. An earlier version tucked them under
+   the question that raised them, which made the system's own enquiry read as a
+   footnote to yours; where a question came from belongs on its page, not as an
+   indent on a list.
 
-   So a question you asked is a root, and the questions it raised sit under it,
-   live, with what each one is doing right now. Nothing here is decoration: a row
-   reads "working" only while its mission is genuinely in an active status, and a
-   root with no nested questions says so rather than implying more is coming. */
+   Nothing here is decoration: a row reads "working" only while its mission is
+   genuinely in an active status, and the wording of an outcome is the board's
+   own — "waiting on your decision" rather than "answered", because §11 puts the
+   decision with the Studio Head. */
 
 import Link from "next/link";
 import { AskedGroup, MissionSummary, ACTIVE_STATUSES } from "@/lib/api";
@@ -38,26 +38,17 @@ export function NestedQuestions({ asked, missions }: {
   asked: AskedGroup[];
   missions: MissionSummary[];
 }) {
-  // Depth is one by design — a nested question does not nest again, because
-  // every node of that tree spends real metered retrieval.
-  const nestedBy = new Map<string, MissionSummary[]>();
-  for (const mission of missions) {
-    if (!mission.raised_by) continue;
-    const list = nestedBy.get(mission.raised_by);
-    if (list) list.push(mission);
-    else nestedBy.set(mission.raised_by, [mission]);
-  }
-
-  // Only roots here: a nested question appears under the answer that raised it,
-  // not a second time at the top.
-  const roots = asked.filter((group) => !group.latest.raised_by);
-  const nestedTotal = [...nestedBy.values()].reduce((n, list) => n + list.length, 0);
+  // Every question gets its own row, nested or typed. Studio Head's call, said
+  // twice: a nested question is a question, so it belongs in this list the way
+  // any other does, with its own page. Tucking it under a parent made it a
+  // footnote to the question that raised it.
+  const roots = asked;
+  const nestedTotal = missions.filter((m) => m.raised_by).length;
   const working = missions.filter((m) => m.raised_by && ACTIVE_STATUSES.has(m.status)).length;
 
   return (
     <ul className="nested-list alive-cascade">
       {roots.map(({ latest: root, times }, i) => {
-        const nested = nestedBy.get(root.id) ?? [];
         const rootState = state(root);
         return (
           <li key={root.id} style={cascade(i)}>
@@ -81,30 +72,6 @@ export function NestedQuestions({ asked, missions }: {
               </span>
             </Link>
 
-            {nested.length > 0 && (
-              <ul className="nested-children">
-                {nested.map((child) => {
-                  const childState = state(child);
-                  return (
-                    <li key={child.id}>
-                      <Link href={`/missions/${child.id}`} className="nested-row alive-track">
-                        <span className="branch" aria-hidden="true" />
-                        <span className="q">{child.objective}</span>
-                        <span className="line">
-                          <span className={`state ${childState.cls}`}>{childState.word}</span>
-                          {child.sources > 0 && (
-                            <><span className="sep">·</span><span>{child.sources} sources</span></>
-                          )}
-                          {child.verified > 0 && (
-                            <><span className="sep">·</span><span>{child.verified} confirmed</span></>
-                          )}
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
           </li>
         );
       })}
