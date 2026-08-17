@@ -30,33 +30,28 @@ const TICKS = 260;
 const DEPTH = 400;          // how far back the far wall sits
 const FOCAL = 900;          // perspective strength: larger is flatter
 
-/* The shape is a claim, so it says something true.
+/* The shape is a claim, so it says something true: a sun and a disc.
 
-   Nodes are pulled onto a shell, and which shell is set by how well the studio
-   knows the thing: what it knows from several facts settles into the core, what
-   rests on a single fact sits out on the surface. The form then reads as a body
-   with a dense middle and a thin skin — which is exactly what the numbers say,
-   that most of what is tracked is known from one fact only. Repulsion still
-   spreads them across their shell, so this is a mould and not a lattice. */
-/* An ellipsoid, not a sphere: the canvas is 720x340, so a sphere is capped by the
-   short axis and four hundred entities have nowhere to go — they win against the
-   shell and fill the frame again. These are the semi-axes of the skin, and the
-   maths below works in normalised ellipsoid space so one scalar can say which
-   shell a node belongs on regardless of direction. */
-const RX = 430;
-const RY = 236;
-const RZ = 320;
-/* How deep the core sits, as a fraction of the skin. */
-const CORE_F = 0.46;
-/* The pull has to beat the repulsion of every other node, and at this size that
-   is hundreds of pairs pushing outward — 0.055 lost, and the mould did not hold. */
-const SHELL_PULL = 0.42;
+   Everything the studio holds a disagreement about is pulled into a mass at the
+   centre; everything settled spreads on a plane around it, each node wired back
+   to the same anchor. That is not decoration — the core is exactly the material
+   a Studio Head cannot act on without deciding something, and the size of that
+   mass against the disc is how much of the world model is contested.
 
-function shellFraction(claims: number): number {
-  // Three facts is where "the studio knows this" begins, so that is the core.
-  const known = Math.min(1, Math.max(0, (claims - 1) / 2));
-  return 1 - (1 - CORE_F) * known;
+   The forces are live and adjustable, because the right spacing depends on how
+   much is on screen: four hundred entities want different numbers from forty.
+   The controls write into a ref the simulation reads each tick, so moving one
+   re-shapes the running model rather than restarting it. */
+const SUN_R = 74;              // how far the contested mass spreads from the anchor
+const PLANE_FLATTEN = 0.09;    // how hard the settled nodes are held to the disc
+
+export interface Forces {
+  wire: number;      // length of the wire to the anchor — the disc's radius
+  pull: number;      // how strongly a node is held at its wire length
+  push: number;      // how hard nodes hold each other off
+  spacing: number;   // the distance below which push applies at all
 }
+export const DEFAULT_FORCES: Forces = { wire: 250, pull: 0.05, push: 1500, spacing: 90 };
 
 /* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
    perspective divide is what makes depth legible at all — without it a rotating
@@ -78,22 +73,26 @@ function build(entities: Record<string, KnowledgeEntity>) {
   const names = Object.keys(entities);
   const nodes: Node[] = names.map((name, i) => {
     const assertions = entities[name].assertions ?? [];
-    // Seeded on a sphere rather than a ring — a Fibonacci lattice, so the
-    // starting shell is even and the simulation is not fighting a seam.
-    const golden = Math.PI * (3 - Math.sqrt(5));
-    const t = names.length > 1 ? i / (names.length - 1) : 0.5;
-    const yUnit = 1 - t * 2;
-    const ring = Math.sqrt(Math.max(0, 1 - yUnit * yUnit));
-    const theta = golden * i;
+    const disputed = assertions.some((a) => a.disputed);
+    // Seeded roughly where it belongs — disputed into the core, settled onto the
+    // disc — so the first ticks refine a shape instead of building one. The angle
+    // is a golden-ratio step, which spreads them without a seam for the model to
+    // fight, and a little jitter keeps coincident nodes from stacking exactly.
+    const theta = Math.PI * (3 - Math.sqrt(5)) * i;
+    const jitter = (n: number) => (Math.sin(i * n) * 0.5 + 0.5);
+    const radius = disputed
+      ? SUN_R * (0.3 + jitter(12.9898) * 0.7)
+      : DEFAULT_FORCES.wire * (0.85 + jitter(78.233) * 0.3);
+    const lift = disputed ? (jitter(43.758) - 0.5) * SUN_R : (jitter(93.989) - 0.5) * 24;
     return {
       id: name,
-      x: W / 2 + Math.cos(theta) * ring * RX * 0.8,
-      y: H / 2 + yUnit * RY * 0.8,
-      z: Math.sin(theta) * ring * RZ * 0.8,
+      x: W / 2 + Math.cos(theta) * radius,
+      y: H / 2 + lift,
+      z: Math.sin(theta) * radius,
       vx: 0, vy: 0, vz: 0,
       claims: assertions.length,
       r: Math.min(24, 9 + assertions.length * 2),
-      disputed: assertions.some((a) => a.disputed),
+      disputed,
     };
   });
 
@@ -112,43 +111,47 @@ function build(entities: Record<string, KnowledgeEntity>) {
   return { nodes, edges };
 }
 
-function settle(nodes: Node[], edges: [number, number][], steps: number) {
-  for (let s = 0; s < steps; s++) {
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i], b = nodes[j];
-        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
-        const d2 = Math.max(64, dx * dx + dy * dy + dz * dz);
-        const f = 1500 / d2, d = Math.sqrt(d2);
-        a.vx -= (dx / d) * f; a.vy -= (dy / d) * f; a.vz -= (dz / d) * f;
-        b.vx += (dx / d) * f; b.vy += (dy / d) * f; b.vz += (dz / d) * f;
-      }
-    }
-    for (const [i, j] of edges) {
+/* One tick of the model, run every frame rather than once up front, so moving a
+   slider re-shapes what you are looking at instead of restarting it. */
+function step(nodes: Node[], f: Forces) {
+  const cutoff = f.spacing * f.spacing;
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
       const a = nodes[i], b = nodes[j];
       const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
-      const d = Math.max(1, Math.hypot(dx, dy, dz));
-      const pull = (d - 110) * 0.012;
-      a.vx += (dx / d) * pull; a.vy += (dy / d) * pull; a.vz += (dz / d) * pull;
-      b.vx -= (dx / d) * pull; b.vy -= (dy / d) * pull; b.vz -= (dz / d) * pull;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      // Only near pairs push. At four hundred nodes the far ones contribute
+      // almost nothing and would cost the whole frame budget.
+      if (d2 > cutoff || d2 === 0) continue;
+      const d = Math.sqrt(Math.max(16, d2));
+      const force = f.push / Math.max(64, d2);
+      a.vx -= (dx / d) * force; a.vy -= (dy / d) * force; a.vz -= (dz / d) * force;
+      b.vx += (dx / d) * force; b.vy += (dy / d) * force; b.vz += (dz / d) * force;
     }
-    for (const n of nodes) {
-      // Toward its own shell, measured in normalised ellipsoid space so the pull
-      // is the same strength in every direction. A plain centring force collapses
-      // everything into one ball and the shape then says nothing.
-      const ux = (n.x - W / 2) / RX, uy = (n.y - H / 2) / RY, uz = n.z / RZ;
-      const un = Math.max(0.001, Math.hypot(ux, uy, uz));
-      const gap = (shellFraction(n.claims) - un) * SHELL_PULL;
-      n.vx += (ux / un) * gap * RX;
-      n.vy += (uy / un) * gap * RY;
-      n.vz += (uz / un) * gap * RZ;
-      n.vx *= 0.86; n.vy *= 0.86; n.vz *= 0.86;
-      // Room to rotate: the box is bounded in x and y so nothing leaves frame,
-      // and in z so the far wall cannot swallow a node entirely.
-      n.x = Math.max(n.r + 44, Math.min(W - n.r - 44, n.x + n.vx));
-      n.y = Math.max(n.r + 14, Math.min(H - n.r - 14, n.y + n.vy));
-      n.z = Math.max(-DEPTH, Math.min(DEPTH, n.z + n.vz));
+  }
+
+  for (const n of nodes) {
+    const ox = n.x - W / 2, oy = n.y - H / 2, oz = n.z;
+    if (n.disputed) {
+      // The sun: held near the anchor in every direction, so the push between
+      // them is what gives the mass its volume.
+      const dist = Math.max(1, Math.hypot(ox, oy, oz));
+      const gap = (SUN_R - dist) * f.pull * 1.6;
+      n.vx += (ox / dist) * gap; n.vy += (oy / dist) * gap; n.vz += (oz / dist) * gap;
+    } else {
+      // The disc: held at wire length within the plane, and flattened onto it.
+      const flat = Math.max(1, Math.hypot(ox, oz));
+      const gap = (f.wire - flat) * f.pull;
+      n.vx += (ox / flat) * gap;
+      n.vz += (oz / flat) * gap;
+      n.vy += (H / 2 - n.y) * PLANE_FLATTEN;
     }
+    n.vx *= 0.84; n.vy *= 0.84; n.vz *= 0.84;
+    n.x += n.vx; n.y += n.vy; n.z += n.vz;
+    // Bounded whatever the sliders say, so nothing leaves the frame.
+    n.x = Math.max(n.r + 20, Math.min(W - n.r - 20, n.x));
+    n.y = Math.max(n.r + 10, Math.min(H - n.r - 10, n.y));
+    n.z = Math.max(-DEPTH, Math.min(DEPTH, n.z));
   }
 }
 
@@ -170,6 +173,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   // O(n²) repulsion to arrive at the identical picture.
   const selectedRef = useRef<string | null>(null);
   const drawRef = useRef<(() => void) | null>(null);
+  const stepRef = useRef<((ticks: number) => void) | null>(null);
   // Rotation lives in refs for the same reason hover does: as state it would
   // re-run the effect and re-settle 260 ticks of O(n²) repulsion on every
   // mouse move of a drag.
@@ -178,6 +182,20 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   // rather than as a flat ring spinning.
   const pitchRef = useRef(-0.22);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
+  // Forces in a ref, mirrored into state only so the sliders can show their own
+  // values: as a dependency they would tear down and rebuild the model on every
+  // pixel of a drag.
+  const forcesRef = useRef<Forces>({ ...DEFAULT_FORCES });
+  const [forces, setForces] = useState<Forces>({ ...DEFAULT_FORCES });
+  const setForce = (key: keyof Forces, value: number) => {
+    forcesRef.current = { ...forcesRef.current, [key]: value };
+    setForces(forcesRef.current);
+    // Settle and repaint on the spot rather than waiting for the animation loop.
+    // The loop is not always there: reduced motion has none at all, and a
+    // background tab has requestAnimationFrame suspended — in both cases the
+    // sliders silently did nothing, which is worse than not having them.
+    stepRef.current?.(24);
+  };
   const draggedRef = useRef(false);
   const [dragging, setDragging] = useState(false);
   // The list can be folded away to give the graph the whole panel. Read after
@@ -283,6 +301,27 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         ctx.lineTo(nodes[j].sx!, nodes[j].sy!);
         ctx.stroke();
       }
+      // The wires. Every node is tied to the same anchor, which is what makes the
+      // disc read as held rather than floating — drawn under the nodes and faint,
+      // because four hundred of them at full strength is a solid disc of line.
+      const anchor = project(
+        { x: W / 2, y: H / 2, z: 0, r: 0 } as Node, yaw, pitch);
+      ctx.lineWidth = 1;
+      for (const n of order) {
+        const lit = focus !== null && n.id === focus;
+        ctx.strokeStyle = lit ? accent : line;
+        ctx.globalAlpha = (lit ? 0.85 : 0.13) * fade(n);
+        ctx.beginPath();
+        ctx.moveTo(anchor.sx, anchor.sy);
+        ctx.lineTo(n.sx!, n.sy!);
+        ctx.stroke();
+      }
+      // The anchor itself, so the wires end somewhere rather than at nothing.
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.arc(anchor.sx, anchor.sy, 3.5 * anchor.k, 0, Math.PI * 2);
+      ctx.fillStyle = ink; ctx.fill();
+
       ctx.globalAlpha = 1;
       for (const n of order) {
         const on = n.id === sel || n.id === focus;
@@ -318,10 +357,15 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     // O(n²) repulsion every frame would be 11k pair calculations at this size;
     // drifting each node around its settled position costs nothing and means
     // the graph is never frozen. The drift is ambient — it claims nothing.
-    settle(nodes, edges, TICKS);
-    for (const n of nodes) {
-      n.bx = n.x; n.by = n.y; n.bz = n.z; n.phase = Math.random() * Math.PI * 2;
-    }
+    // A few ticks up front so the first paint is a shape rather than the seed
+    // ring, then the loop keeps stepping it — and the controls can step it
+    // directly when there is no loop.
+    const advance = (ticks: number) => {
+      for (let i = 0; i < ticks; i++) step(nodes, forcesRef.current);
+      drawRef.current?.();
+    };
+    stepRef.current = advance;
+    advance(90);
     drawRef.current = draw;
     draw();
     // Reduced motion draws the settled layout once and stops. The redraw effect
@@ -342,11 +386,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       if (!dragRef.current && hoveredRef.current === null && selectedRef.current === null) {
         yawRef.current += dt * 0.125;
       }
-      for (const n of nodes) {
-        n.x = n.bx! + Math.sin(t * 0.42 + n.phase!) * 4.5;
-        n.y = n.by! + Math.cos(t * 0.33 + n.phase!) * 3.5;
-        n.z = n.bz! + Math.sin(t * 0.27 + n.phase!) * 6;
-      }
+      // One tick a frame: the model is never frozen, and a slider takes effect
+      // on the thing you are already looking at.
+      step(nodes, forcesRef.current);
       draw();
       raf = requestAnimationFrame(drift);
     };
@@ -459,13 +501,44 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                 + `require the graph.`}
             />
           </Reticle>
+          {/* The settings bar. These are the model's own forces, not a view
+              filter — what they change is where the nodes actually settle, which
+              is why they are worth having: the right spacing for forty entities
+              is the wrong spacing for four hundred. */}
+          <div className="graph-forces">
+            <label>
+              <span>wire length<b>{forces.wire}</b></span>
+              <input type="range" min={110} max={400} step={5} value={forces.wire}
+                     onChange={(e) => setForce("wire", Number(e.target.value))} />
+            </label>
+            <label>
+              <span>pull to anchor<b>{forces.pull.toFixed(2)}</b></span>
+              <input type="range" min={0.01} max={0.2} step={0.01} value={forces.pull}
+                     onChange={(e) => setForce("pull", Number(e.target.value))} />
+            </label>
+            <label>
+              <span>push apart<b>{forces.push}</b></span>
+              <input type="range" min={200} max={5000} step={100} value={forces.push}
+                     onChange={(e) => setForce("push", Number(e.target.value))} />
+            </label>
+            <label>
+              <span>keep apart within<b>{forces.spacing}</b></span>
+              <input type="range" min={30} max={200} step={5} value={forces.spacing}
+                     onChange={(e) => setForce("spacing", Number(e.target.value))} />
+            </label>
+            <button className="gf-reset" onClick={() => {
+              forcesRef.current = { ...DEFAULT_FORCES };
+              setForces(forcesRef.current);
+            }}>reset</button>
+          </div>
+
           <p className="graph-legend">
             It turns on its own, and <b>you can drag it</b> — pointing at anything stops it so you
-            can read. The shape is the studio&apos;s knowledge: what it knows from several facts
-            settles into the core, what rests on a single fact sits out on the surface, so the thin
-            skin is how much is thinly sourced. Bigger means more has been asserted, nearer is drawn
-            larger, and amber means something is disputed. A line means one question learned about
-            both. Only the busiest are named — hover to light up any other and everything it
+            can read. The shape is the studio&apos;s knowledge: everything <b>disputed</b> is drawn
+            into the mass at the centre, and everything settled sits on the plane around it, each
+            wired back to the same anchor. So the size of that core against the disc is how much of
+            what the studio knows is contested. Bigger means more has been asserted and nearer is
+            drawn larger. Only the busiest are named — hover to light up any other and everything it
             connects to, or click to read it.
           </p>
         </div>
