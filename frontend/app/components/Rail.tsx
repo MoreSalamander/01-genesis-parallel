@@ -96,14 +96,17 @@ export function Rail() {
       {/* Only the ones being worked on. A finished nested question clears from
           here and lives on the board with every other question — this slot is a
           tracker, not an archive, so what is in it is what is happening. */}
+      {/* Gone, not empty. A tracker with nothing in it should take no room: a
+          permanent header over a paragraph explaining its own emptiness is worse
+          than the duplicate list it replaced, because it never stops saying it.
+          The rail is short and sticky, so anything that is not currently true
+          is costing the things that are. */}
+      {inFlight.length > 0 && (
       <div className="rail-block">
-        <div className="rail-head">nested questions</div>
-        {inFlight.length === 0 && (
-          <div className="rail-empty">
-            nothing being worked on — when an answer leaves something thin, the question it
-            raises appears here while it is researched
-          </div>
-        )}
+        <div className="rail-head">
+          nested questions
+          <span className="rail-working-tag">{inFlight.length} being researched</span>
+        </div>
         {inFlight.map((q, i) => {
           const href = `/missions/${q.answered_by}`;
           return (
@@ -121,6 +124,7 @@ export function Rail() {
           );
         })}
       </div>
+      )}
 
     </aside>
   );
