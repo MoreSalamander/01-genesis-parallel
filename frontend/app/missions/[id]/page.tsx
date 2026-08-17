@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -98,6 +99,8 @@ export default function MissionPage() {
         <div className="row" style={{ gap: 12 }}>
           <MissionChip status={mission.status} running={running} />
           <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{mission.id}</span>
+          {/* The same record, laid out as an argument a studio can forward or print. */}
+          <Link href={`/missions/${mission.id}/paper`} className="paper-link">read as a paper →</Link>
         </div>
         <VoiceLine line={voiceFor(VOICE, mission.status)} thinking={running} />
         {mission.error && <Note tone="bad">{mission.error}</Note>}

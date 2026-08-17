@@ -1165,3 +1165,114 @@ td.num { font-variant-numeric: tabular-nums; }
 .fleet-board .sphere-name { font-size: 9.5px; line-height: 1.15; }
 .fleet-board .sphere-n { font-size: 9px; }
 .fleet-board .fleet-foot { margin-top: 10px; font-size: 11.5px; }
+
+
+/* --- the evidence record as a paper (missions/[id]/paper) --------------------
+   Set on paper rather than in the console's dark: this is a document a studio
+   reads, forwards and prints, and it should look like one. Serif at a measured
+   width, numbered sections, real citations. @media print drops every control and
+   sets it on white. */
+.paper {
+  --ink-paper: #14181f;
+  --ink-soft: #4a5260;
+  --rule: #d9dde4;
+  max-width: 46rem; margin: 0 auto; padding: 28px 30px 64px;
+  background: #f7f6f3; color: var(--ink-paper);
+  font: 15px/1.62 Georgia, "Iowan Old Style", "Times New Roman", serif;
+  border-radius: 12px;
+}
+.paper-loading { color: var(--ink-soft); font-style: italic; }
+
+.paper-nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px; margin-bottom: 26px; border-bottom: 1px solid var(--rule);
+  font: 11px var(--mono); letter-spacing: 0.04em;
+}
+.paper-nav a { color: var(--ink-soft); text-decoration: none; }
+.paper-nav a:hover { color: var(--ink-paper); text-decoration: underline; }
+.paper-nav button {
+  font: inherit; background: none; border: 1px solid var(--rule); border-radius: 5px;
+  padding: 4px 10px; color: var(--ink-soft); cursor: pointer;
+}
+.paper-nav button:hover { color: var(--ink-paper); border-color: var(--ink-soft); }
+
+.paper-head { margin-bottom: 26px; }
+.paper-kind {
+  margin: 0 0 8px; font: 9.5px var(--mono); letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+.paper h1 { margin: 0 0 10px; font-size: 27px; line-height: 1.26; font-weight: 600; }
+.paper-by { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+.paper-by .paper-id { margin-left: 10px; font: 10.5px var(--mono); opacity: 0.7; }
+.paper-raised { margin: 10px 0 0; font-size: 13px; color: var(--ink-soft); font-style: italic; }
+.paper-raised a { color: inherit; }
+
+.paper-abstract {
+  padding: 16px 18px; margin-bottom: 26px;
+  background: #eeece7; border-left: 3px solid #9aa2b0; border-radius: 0 7px 7px 0;
+}
+.paper-abstract h2 { margin-top: 0; }
+.paper-confidence { font-size: 13px; color: var(--ink-soft); margin-bottom: 0; }
+
+.paper section { margin-bottom: 30px; }
+.paper h2 {
+  font-size: 13px; font-family: var(--mono); font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft);
+  margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.paper h3 { font-size: 12px; font-family: var(--mono); letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-soft); margin: 22px 0 8px; }
+.paper-count { font-weight: 400; opacity: 0.65; letter-spacing: 0; }
+.paper-lead { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 14px; }
+.paper-none { font-size: 13.5px; color: var(--ink-soft); font-style: italic; }
+.paper p { margin: 0 0 12px; }
+
+.paper-findings { margin: 0; padding-left: 22px; }
+.paper-findings li { margin-bottom: 10px; }
+.paper-tag {
+  display: inline-block; margin-left: 8px; font: 9.5px var(--mono);
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft);
+}
+
+.paper-claim { margin-bottom: 20px; }
+.paper-claim.disputed { border-left: 3px solid #c08a1e; padding-left: 13px; }
+.pc-text { margin: 0 0 4px; }
+.pc-cite { font-size: 10px; font-family: var(--mono); color: #2f6ab0; margin-left: 3px; }
+.pc-meta { margin: 0; font: 11px var(--mono); color: var(--ink-soft); }
+.pc-entity { margin-right: 10px; font-weight: 700; }
+.pc-conflict { margin: 4px 0 0; font-size: 13px; color: #8a6110; }
+.paper blockquote {
+  margin: 9px 0 0 14px; padding-left: 12px; border-left: 2px solid var(--rule);
+  font-size: 13.5px; color: var(--ink-soft);
+}
+.paper blockquote cite { display: block; margin-top: 3px; font: 10.5px var(--mono); font-style: normal; }
+
+.paper-single { margin: 0; padding-left: 22px; font-size: 14px; }
+.paper-single li { margin-bottom: 7px; color: var(--ink-soft); }
+.paper-nested { list-style: none; margin: 0; padding: 0; }
+.paper-nested li { margin-bottom: 8px; }
+.paper-nested a { color: #2f6ab0; }
+
+.paper-refs ol { margin: 0; padding-left: 26px; font-size: 12.5px; }
+.paper-refs li { margin-bottom: 7px; word-break: break-word; }
+.paper-refs a { color: #2f6ab0; }
+.paper-uncited li { color: var(--ink-soft); }
+.paper-foot {
+  margin-top: 34px; padding-top: 14px; border-top: 1px solid var(--rule);
+  font-size: 12px; color: var(--ink-soft);
+}
+
+@media print {
+  .paper { max-width: none; margin: 0; padding: 0; background: #fff; border-radius: 0; }
+  .paper-nav { display: none; }
+  .paper-abstract { background: none; border-left: 2px solid #999; }
+  .paper section { break-inside: auto; }
+  .paper-claim, .paper-findings li { break-inside: avoid; }
+  .paper h2 { break-after: avoid; }
+  .paper-refs a { color: inherit; text-decoration: none; }
+}
+.paper-link {
+  font: 11px var(--mono); color: var(--accent); text-decoration: none;
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.paper-link:hover { color: var(--ink); }
