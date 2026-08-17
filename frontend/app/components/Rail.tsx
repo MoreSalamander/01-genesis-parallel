@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ACTIVE_STATUSES, EventRecord, MissionSummary, getEvents, listMissions } from "@/lib/api";
 import { Feed } from "./Hud";
+import { StudioChecklist } from "./StudioChecklist";
 import { Rolling } from "@/lib/alive";
 
 export function Rail() {
@@ -129,6 +130,7 @@ export function Rail() {
         </div>
       )}
 
+      <StudioChecklist missions={missions} />
     </aside>
   );
 }

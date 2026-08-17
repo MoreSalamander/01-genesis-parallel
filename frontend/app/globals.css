@@ -1368,3 +1368,30 @@ td.num { font-variant-numeric: tabular-nums; }
 .rail-item.awaiting .s { display: grid; gap: 1px; }
 .rail-item.awaiting .counts { font-size: 10px; color: var(--muted); }
 .rail-item.awaiting .conflict { color: var(--warn); }
+
+
+/* --- the production checklist (components/StudioChecklist.tsx) --------------
+   The rail can now outgrow the viewport, and a sticky column taller than the
+   screen hides its own bottom. It scrolls inside itself instead. */
+.rail { max-height: calc(100vh - 32px); overflow-y: auto; }
+
+.slate { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.slate button {
+  display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center;
+  width: 100%; text-align: left; background: none; border: 0; padding: 4px 0;
+  cursor: pointer; font: inherit; color: var(--ink-2);
+}
+.slate button:hover { color: var(--ink); }
+.slate .box {
+  width: 12px; height: 12px; border: 1px solid var(--line); border-radius: 3px;
+  font: 9px/11px var(--mono); text-align: center; color: var(--good);
+}
+.slate li.done .box { border-color: var(--good); }
+.slate li.done .nm { color: var(--muted); text-decoration: line-through; }
+.slate .nm { font-size: 12px; }
+/* The count is real data sitting in a fictional list, so it is set like the
+   console's other numbers rather than like the slate's text. */
+.slate .asked { font: 10px var(--mono); color: var(--accent); }
+.slate .asked.none { color: var(--muted); opacity: 0.6; }
+.slate-note { margin: 9px 0 0; font-size: 10.5px; line-height: 1.5; color: var(--muted); }
+.slate-note b { color: var(--ink-2); }
