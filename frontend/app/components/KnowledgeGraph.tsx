@@ -48,7 +48,16 @@ const FOCAL = 900;          // perspective strength: larger is flatter
    The controls write into a ref the simulation reads each tick, so moving one
    re-shapes the running model rather than restarting it. */
 const SUN_R = 74;              // how far the contested mass spreads from the anchor
-const PLANE_FLATTEN = 0.09;    // how hard the plane arrangement holds its disc
+/* How hard the plane holds its disc. This was 0.09 and produced a slab 40% of the
+   canvas tall — switching to "plane" changed the arrangement and did not look like
+   a plane, which is worse than not switching. Six hundred nodes crowded onto a
+   two-dimensional annulus push each other out of it in every direction, so the
+   flattening has to beat that push rather than merely suggest a preference. */
+const PLANE_FLATTEN = 0.6;
+/* And the push must stop lifting them out. In plane mode the vertical component of
+   a node's velocity is damped hard, so repulsion spreads nodes across the disc
+   instead of thickening it. */
+const PLANE_DAMP = 0.22;
 
 export interface Forces {
   wire: number;      // length of the wire to the anchor — the shell's radius
@@ -184,6 +193,7 @@ function step(nodes: Node[], f: Forces): number {
       n.vx += (ox / flat) * gap;
       n.vz += (oz / flat) * gap;
       n.vy += (H / 2 - n.y) * PLANE_FLATTEN;
+      n.vy *= PLANE_DAMP;      // push spreads the disc; it does not thicken it
     } else {
       // A shell: held at wire length in every direction. Only the radius is
       // constrained — where a node sits on the shell is left to the push between
@@ -392,13 +402,6 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     canvas.width = W * dpr; canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // The canvas is drawn in a 720-wide space and displayed around 430 wide, so
-    // every label at once is a 6px mat of overlapping text at 106 entities.
-    // Name the ones carrying the most, and let hover name the rest.
-    const labelled = new Set(
-      [...nodes].sort((a, b) => b.claims - a.claims).slice(0, 20).map((n) => n.id),
-    );
-
     const draw = () => {
       // Recomputed each frame so hover responds without restarting the layout.
       const sel = selectedRef.current;
@@ -517,14 +520,19 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
           ctx.strokeStyle = colour; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.stroke();
           ctx.globalAlpha = 1;
         }
-        // A neighbour of the toured node is named while it holds the frame, so a
-        // fan can be read rather than just seen.
-        if (labelled.has(n.id) || related) {
-          ctx.fillStyle = on ? css.getPropertyValue("--ink").trim() || "#fff" : ink;
-          ctx.font = `${on ? "600 " : ""}15px ui-sans-serif, system-ui, sans-serif`;
+        /* Named only when you point at it or open it. The cycle used to name the
+           whole fan — a hundred and sixty labels at once, which is a mat of text
+           rather than a reading of anything, and it thickened the arrangement it
+           was supposed to describe. The default set of twenty is gone with it: a
+           name is an answer to "what is this", and that question is asked by
+           hovering, not by looking. */
+        if (n.id === hoveredRef.current || n.id === sel) {
+          ctx.fillStyle = css.getPropertyValue("--ink").trim() || "#fff";
+          ctx.font = "600 15px ui-sans-serif, system-ui, sans-serif";
           ctx.textAlign = "center";
-          ctx.fillText(n.id.length > 22 ? `${n.id.slice(0, 21)}…` : n.id,
-                       n.sx!, n.sy! + n.sr! + 14);
+          ctx.globalAlpha = 1;
+          ctx.fillText(n.id.length > 34 ? `${n.id.slice(0, 33)}…` : n.id,
+                       n.sx!, n.sy! + n.sr! + 15);
         }
       }
       ctx.globalAlpha = 1;
@@ -804,11 +812,16 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
             <button className="gf-reset" onClick={() => {
               forcesRef.current = { ...DEFAULT_FORCES };
               setForces(forcesRef.current);
+              // The camera too. A plane seen from directly above is a filled disc
+              // and reads exactly like a sphere, so a dragged view is a common
+              // reason the arrangement "did not change" when it did.
+              yawRef.current = 0.5;
+              pitchRef.current = -0.22;
               try {
                 localStorage.removeItem(FORCES_KEY);
                 localStorage.removeItem(LAYOUT_KEY);
               } catch { /* ignore */ }
-              stepRef.current?.(120);
+              stepRef.current?.(160);
             }}>reset</button>
           </div>
 
