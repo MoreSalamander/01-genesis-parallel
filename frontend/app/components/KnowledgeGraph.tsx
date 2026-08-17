@@ -285,7 +285,26 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     try {
       const raw = localStorage.getItem(FORCES_KEY);
       if (!raw) return;
-      const saved = { ...DEFAULT_FORCES, ...JSON.parse(raw) } as Forces;
+      /* Sanitised key by key rather than spread and trusted. Stored settings can
+         predate a control — and a control added after they were written reads
+         undefined, which crashed the settings bar on `.toFixed` and took the whole
+         graph panel down with it. A graph that will not render because of a stale
+         preference is a bad trade for remembering the preference. */
+      const raw_saved = JSON.parse(raw) as Partial<Forces>;
+      const num = (v: unknown, fallback: number) =>
+        typeof v === "number" && Number.isFinite(v) ? v : fallback;
+      const saved: Forces = {
+        wire: num(raw_saved.wire, DEFAULT_FORCES.wire),
+        pull: num(raw_saved.pull, DEFAULT_FORCES.pull),
+        push: num(raw_saved.push, DEFAULT_FORCES.push),
+        spacing: num(raw_saved.spacing, DEFAULT_FORCES.spacing),
+        glow: num(raw_saved.glow, DEFAULT_FORCES.glow),
+        edgeWidth: num(raw_saved.edgeWidth, DEFAULT_FORCES.edgeWidth),
+        colour: typeof raw_saved.colour === "string" ? raw_saved.colour : DEFAULT_FORCES.colour,
+        edgeColour:
+          typeof raw_saved.edgeColour === "string" ? raw_saved.edgeColour : DEFAULT_FORCES.edgeColour,
+        shape: raw_saved.shape === "plane" ? "plane" : "sphere",
+      };
       forcesRef.current = saved;
       setForces(saved);
       stepRef.current?.(60);
@@ -729,7 +748,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                      onChange={(e) => setForce("wire", Number(e.target.value))} />
             </label>
             <label>
-              <span>pull to anchor<b>{forces.pull.toFixed(2)}</b></span>
+              <span>pull to anchor<b>{(forces.pull ?? DEFAULT_FORCES.pull).toFixed(2)}</b></span>
               <input type="range" min={0.01} max={0.2} step={0.01} value={forces.pull}
                      onChange={(e) => setForce("pull", Number(e.target.value))} />
             </label>
@@ -744,7 +763,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                      onChange={(e) => setForce("spacing", Number(e.target.value))} />
             </label>
             <label>
-              <span>anchor strength<b>{forces.glow.toFixed(2)}</b></span>
+              <span>anchor strength<b>{(forces.glow ?? DEFAULT_FORCES.glow).toFixed(2)}</b></span>
               <input type="range" min={0.02} max={0.7} step={0.02} value={forces.glow}
                      onChange={(e) => setForce("glow", Number(e.target.value))} />
             </label>
@@ -759,7 +778,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                      onChange={(e) => setForce("edgeColour", e.target.value)} />
             </label>
             <label>
-              <span>connection thickness<b>{forces.edgeWidth.toFixed(1)}</b></span>
+              <span>connection thickness<b>{(forces.edgeWidth ?? DEFAULT_FORCES.edgeWidth).toFixed(1)}</b></span>
               <input type="range" min={0.4} max={4} step={0.2} value={forces.edgeWidth}
                      onChange={(e) => setForce("edgeWidth", Number(e.target.value))} />
             </label>
