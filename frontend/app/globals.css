@@ -1359,3 +1359,12 @@ td.num { font-variant-numeric: tabular-nums; }
   border-bottom: 1px dotted color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .board-nav a:hover { color: var(--accent); }
+
+
+/* --- needs approval (components/Rail.tsx) -----------------------------------
+   An action queue, so it reads as one: amber rather than accent, because this is
+   the one thing on the rail that is waiting on a person. */
+.rail-item.awaiting { border-left: 2px solid var(--warn); padding-left: 8px; }
+.rail-item.awaiting .s { display: grid; gap: 1px; }
+.rail-item.awaiting .counts { font-size: 10px; color: var(--muted); }
+.rail-item.awaiting .conflict { color: var(--warn); }

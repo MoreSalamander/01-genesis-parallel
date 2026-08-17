@@ -9,16 +9,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  ACTIVE_STATUSES, EventRecord, MissionSummary, NestedQuestion,
-  getEvents, getNestedQuestions, listMissions,
-} from "@/lib/api";
+import { ACTIVE_STATUSES, EventRecord, MissionSummary, getEvents, listMissions } from "@/lib/api";
 import { Feed } from "./Hud";
 import { Rolling } from "@/lib/alive";
 
 export function Rail() {
   const [missions, setMissions] = useState<MissionSummary[]>([]);
-  const [nested, setNested] = useState<NestedQuestion[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const path = usePathname();
 
@@ -27,7 +23,6 @@ export function Rail() {
       listMissions().then(setMissions).catch(() => {});
       // Read from the graph, not from missions carrying raised_by: a question is
       // recorded when it is raised, and only some are dispatched as missions.
-      getNestedQuestions(40).then(setNested).catch(() => {});
       // Live activity belongs beside the questions it is activity on, not in a
       // column of its own across the board.
       getEvents(60).then(setEvents).catch(() => {});
@@ -45,11 +40,21 @@ export function Rail() {
   // "in flight" for days.
   const open = missions.filter((m) => ACTIVE_STATUSES.has(m.status)).length;
 
-  // A nested question is in the tracker only while it is genuinely being
-  // researched. Finished ones clear: they are on the board like any other
-  // question, so keeping them here too would make this an archive of things
-  // that already happened.
-  const inFlight = nested.filter((q) => q.status === "working");
+  /* What the rail is for: the things waiting on the Studio Head.
+
+     A progress indicator was the wrong job for this slot — live activity already
+     says how many questions are in flight, right above. What is genuinely easy to
+     miss is a finished answer waiting on a decision, and most of all a nested
+     question's answer, because nobody typed that question and so nobody is
+     watching for it. §11 puts the decision with the Studio Head; this is the
+     queue that boundary implies.
+
+     Nested questions are why the block exists but not all of it: a queue that
+     omitted the question you typed yourself would be a strange kind of queue. The
+     ones the system raised are marked. */
+  const awaiting = missions
+    .filter((m) => m.status === "RECOMMENDED")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
   const vitals = [
     { label: "answers", value: missions.length },
@@ -93,37 +98,35 @@ export function Rail() {
           what is thin, and each shortfall going off to be researched as a
           question of its own. In flight first, because that is the part that
           changes while you watch. */}
-      {/* Only the ones being worked on. A finished nested question clears from
-          here and lives on the board with every other question — this slot is a
-          tracker, not an archive, so what is in it is what is happening. */}
-      {/* Gone, not empty. A tracker with nothing in it should take no room: a
-          permanent header over a paragraph explaining its own emptiness is worse
-          than the duplicate list it replaced, because it never stops saying it.
-          The rail is short and sticky, so anything that is not currently true
-          is costing the things that are. */}
-      {inFlight.length > 0 && (
-      <div className="rail-block">
-        <div className="rail-head">
-          nested questions
-          <span className="rail-working-tag">{inFlight.length} being researched</span>
-        </div>
-        {inFlight.map((q, i) => {
-          const href = `/missions/${q.answered_by}`;
-          return (
+      {/* Gone, not empty. A queue with nothing in it should take no room: a
+          permanent header over a paragraph explaining its own emptiness never
+          stops saying nothing, and the rail is short and sticky, so anything on it
+          that is not currently true costs the things that are. */}
+      {awaiting.length > 0 && (
+        <div className="rail-block">
+          <div className="rail-head">
+            needs approval
+            <span className="rail-working-tag">{awaiting.length} waiting</span>
+          </div>
+          {awaiting.map((m) => (
             <Link
-              href={href}
-              key={`${q.question}-${i}`}
-              className={`rail-item nested working alive-track${path === href ? " on" : ""}`}
+              href={`/missions/${m.id}`}
+              key={m.id}
+              className={`rail-item awaiting alive-track${path === `/missions/${m.id}` ? " on" : ""}`}
             >
-              <span className="q">{q.question}</span>
+              <span className="q">{m.objective}</span>
               <span className="s">
-                <span className="alive-think" aria-hidden="true"><i /><i /><i /></span>
-                {q.raised_by_objective && <span className="from">from: {q.raised_by_objective}</span>}
+                {m.raised_by
+                  ? <span className="from">it asked itself · {m.sources} sources</span>
+                  : <span className="from">you asked · {m.sources} sources</span>}
+                <span className="counts">
+                  {m.verified} confirmed
+                  {m.conflicted > 0 && <span className="conflict"> · {m.conflicted} disputed</span>}
+                </span>
               </span>
             </Link>
-          );
-        })}
-      </div>
+          ))}
+        </div>
       )}
 
     </aside>
