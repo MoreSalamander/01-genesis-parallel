@@ -8,6 +8,8 @@ import {
 } from "@/lib/api";
 import { HowThisWorks } from "./components/HowThisWorks";
 import { ContextGraph } from "./components/ContextGraph";
+import { FleetSpheres } from "./components/FleetSpheres";
+import { GeminiObject } from "./components/GeminiObject";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
 import { Feed, Panel, Readout, Ring, RingLegend } from "./components/Hud";
 import { Note, VoiceLine, cascade, proofState, useCursorGlow } from "@/lib/alive";
@@ -251,6 +253,10 @@ export default function Board() {
           </ul>
         </Panel>
       )}
+
+      <GeminiObject running={running} />
+
+      <FleetSpheres running={running} />
 
       <ContextGraph />
     </main>

@@ -102,6 +102,29 @@ export const getMission = (id: string) => api<MissionDetail>(`/api/missions/${id
 export const getEvents = (limit = 300, mission = "") =>
   api<EventRecord[]>(`/api/events?limit=${limit}${mission ? `&mission=${encodeURIComponent(mission)}` : ""}`);
 export const getAgents = () => api<AgentRoster>("/api/agents");
+
+/** Standing tallies for the board: what each agent and each line of enquiry has
+ *  done across every mission, counted over the whole event log. */
+export interface FleetSpecialist {
+  name: string; focus: string; permissions: string[]; tasks: number; produced: number;
+}
+export interface FleetTally {
+  standing: StandingAgent[];
+  domains: { domain: string; specialists: FleetSpecialist[]; tasks: number; sources: number }[];
+  follow_up: { name: string; tasks: number; produced: number };
+  totals: { missions: number; raised: number; tasks: number; produced: number; sources: number };
+}
+export const getFleet = () => api<FleetTally>("/api/fleet");
+
+/** Gemini's standing record (app/cognition_ledger.py is a window, so `on_record`
+ *  says how many calls this covers rather than implying an all-time total). */
+export interface GeminiSummary {
+  model: string; on_record: number; calls: number; tokens: number; ms: number;
+  live: number; malformed: number;
+  by_role: { role: string; calls: number; ms: number; tokens: number }[];
+  latest: CognitionCall | null;
+}
+export const getCognitionSummary = () => api<GeminiSummary>("/api/cognition/summary");
 /** Gemini's own record. `ref` scopes it to one mission (filtered server-side
  *  across the whole ledger, so an older mission still resolves). */
 export const getCognition = (ref = "", limit = 40) =>

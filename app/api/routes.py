@@ -4,6 +4,8 @@ this API; the federation consumes it — never the reverse (Handoff §2, §16).
 """
 from __future__ import annotations
 
+from collections import Counter
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
@@ -165,6 +167,75 @@ def agents() -> dict:
     return roster.roster()
 
 
+@router.get("/fleet")
+def fleet() -> dict:
+    """What every agent and every line of enquiry has actually done, all-time.
+
+    The mission page shows one question's crew; the board needs the standing
+    tally, so this counts across every mission rather than the recent few. Work
+    is counted from the events the agents emitted (`evidence.created` carries
+    the specialist that produced it) and from the tasks the planner wrote —
+    never estimated, so a sphere that reads 42 is 42 things that happened.
+    """
+    from app.agents import roster as roster_mod
+
+    runtime = get_runtime()
+    missions = runtime.working.all()
+    # The whole log: a tally over a tail would quietly under-report every agent
+    # that worked before the last few hundred events.
+    events = runtime.bus.tail(1_000_000)
+
+    produced: dict[str, int] = {}
+    for event in events:
+        if event.get("event") != "evidence.created":
+            continue
+        who = str(event.get("specialist") or "")
+        if who:
+            produced[who] = produced.get(who, 0) + int(event.get("count") or 0)
+
+    found: dict[str, int] = {}
+    for event in events:
+        if event.get("event") != "signal.discovered":
+            continue
+        domain = str(event.get("domain") or "")
+        if domain:
+            found[domain] = found.get(domain, 0) + 1
+
+    tasks_by_specialist: dict[str, int] = {}
+    tasks_by_domain: dict[str, int] = {}
+    for mission in missions:
+        for task in mission.tasks:
+            tasks_by_specialist[task.specialist] = tasks_by_specialist.get(task.specialist, 0) + 1
+            tasks_by_domain[task.domain.value] = tasks_by_domain.get(task.domain.value, 0) + 1
+
+    cast = roster_mod.roster()
+    for domain in cast["domains"]:
+        name = domain["domain"]
+        domain["tasks"] = tasks_by_domain.get(name, 0)
+        domain["sources"] = found.get(name, 0)
+        for specialist in domain["specialists"]:
+            specialist["tasks"] = tasks_by_specialist.get(specialist["name"], 0)
+            specialist["produced"] = produced.get(specialist["name"], 0)
+
+    # The deepen loop hires a researcher that is on no standing roster.
+    follow_up = {"name": "follow-up researcher",
+                 "tasks": sum(1 for m in missions for s in m.stages if s.name.startswith("ROUND ")),
+                 "produced": produced.get("follow-up researcher", 0)}
+
+    return {
+        "standing": cast["standing"],
+        "domains": cast["domains"],
+        "follow_up": follow_up,
+        "totals": {
+            "missions": len(missions),
+            "raised": sum(1 for m in missions if m.raised_by),
+            "tasks": sum(tasks_by_domain.values()) + follow_up["tasks"],
+            "produced": sum(produced.values()),
+            "sources": sum(found.values()),
+        },
+    }
+
+
 @router.get("/events")
 def events(limit: int = 100, mission: str = "") -> list[dict]:
     """Recent activity, or one mission's own activity when `mission` is given."""
@@ -185,6 +256,49 @@ def cognition(limit: int = 40, ref: str = "") -> list[dict]:
     from app import cognition_ledger
 
     return cognition_ledger.tail(limit=limit, ref=ref or None)
+
+
+@router.get("/cognition/summary")
+def cognition_summary() -> dict:
+    """Gemini's own standing tally, for the board.
+
+    Declared before /cognition/{cog_id} on purpose: FastAPI matches in
+    declaration order, and the other way round "summary" is read as a call id.
+
+    The ledger is a window, not an archive (cognition_ledger._MAX_RECORDS), so
+    this reports what is still on record and says how many that is rather than
+    implying it is everything the model has ever done.
+    """
+    from app import cognition_ledger
+
+    rows = cognition_ledger.tail(limit=1_000_000)
+    by_role: dict[str, dict] = {}
+    for row in rows:
+        entry = by_role.setdefault(row["role"], {"role": row["role"], "calls": 0, "ms": 0, "tokens": 0})
+        entry["calls"] += 1
+        entry["ms"] += int(row.get("ms") or 0)
+        entry["tokens"] += int((row.get("tokens") or {}).get("total") or 0)
+
+    # Name the model that actually ran, not whichever row happens to be newest:
+    # one fixture call at the top had the board reporting the engine as
+    # "fixture (no model called)" while 139 live calls sat underneath it.
+    live_models = Counter(r["model"] for r in rows if r.get("live") and r.get("model"))
+    any_models = Counter(r["model"] for r in rows if r.get("model"))
+    ranked = live_models or any_models
+
+    return {
+        "model": ranked.most_common(1)[0][0] if ranked else "",
+        "on_record": len(rows),
+        "calls": len(rows),
+        "tokens": sum(int((r.get("tokens") or {}).get("total") or 0) for r in rows),
+        "ms": sum(int(r.get("ms") or 0) for r in rows),
+        "live": sum(1 for r in rows if r.get("live")),
+        "malformed": sum(1 for r in rows if not r.get("parsed_ok")),
+        "by_role": sorted(by_role.values(), key=lambda r: r["calls"], reverse=True),
+        # What it was doing most recently, so the object on the board has
+        # something true to say rather than a generic idle state.
+        "latest": rows[0] if rows else None,
+    }
 
 
 @router.get("/cognition/{cog_id}")

@@ -848,3 +848,97 @@ td.num { font-variant-numeric: tabular-nums; }
 .raised-row .q { display: block; font-size: 13px; color: var(--ink); }
 .raised-row .line { display: block; margin-top: 4px; font: 11px var(--mono); color: var(--muted); }
 .raised-row .sep { margin: 0 6px; opacity: 0.5; }
+
+
+/* --- the crew, as bodies on the board (components/FleetSpheres.tsx) ---------
+   Size is the tally and nothing else. A role that has never been called stays
+   visible but dark: "only the roles a question needs are instantiated" can only
+   be read off a fleet that shows the ones standing down. */
+.fleet-board.live { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.fleet-tally {
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline;
+  padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
+  font-size: 13px; color: var(--ink-2);
+}
+.fleet-tally b { color: var(--ink); font-size: 15px; }
+
+.enquiry-line { margin-top: 14px; --dot: var(--accent); }
+.enquiry-line.d-market    { --dot: var(--accent); }
+.enquiry-line.d-talent    { --dot: #4bc6a8; }
+.enquiry-line.d-industry  { --dot: #9085e9; }
+.enquiry-line.d-strategic { --dot: var(--warn); }
+.enquiry-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.enquiry-head .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dot); flex: none; }
+.enquiry-head .nm {
+  font: 700 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-2);
+}
+.enquiry-head .n { font: 10.5px var(--mono); color: var(--muted); }
+
+.spheres { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.sphere { display: grid; justify-items: center; gap: 4px; width: 104px; }
+.sphere .orb {
+  width: calc(34px * var(--scale, 1)); height: calc(34px * var(--scale, 1));
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%,
+    color-mix(in srgb, var(--dot) 92%, white), var(--dot) 62%,
+    color-mix(in srgb, var(--dot) 55%, var(--page)));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--dot) 26%, transparent);
+}
+.sphere.idle .orb {
+  background: none; border: 1px dashed var(--line); box-shadow: none;
+  width: 22px; height: 22px;
+}
+.sphere.breathing .orb {
+  animation: sphere-breathe 4.2s var(--alive-ease, ease-in-out) infinite;
+  animation-delay: calc(var(--i, 0) * 220ms);
+}
+@keyframes sphere-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.07); }
+}
+.sphere-name { font-size: 11px; color: var(--ink-2); text-align: center; line-height: 1.25; }
+.sphere-n { font: 10px var(--mono); color: var(--muted); }
+.sphere.idle .sphere-name, .sphere.idle .sphere-n { color: var(--muted); opacity: 0.7; }
+.fleet-foot { margin-top: 14px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.fleet-foot.muted { color: var(--muted); font-size: 12px; margin-top: 6px; }
+@media (prefers-reduced-motion: reduce) { .sphere.breathing .orb { animation: none; } }
+
+/* --- the engine (components/GeminiObject.tsx) -------------------------------
+   The ring is where the model's time actually went, arc by arc. It is a
+   readout, not a sweep: it does not move unless the numbers moved. */
+.gemini-object.thinking { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.engine { display: flex; gap: 26px; flex-wrap: wrap; align-items: center; }
+.engine-ring { position: relative; width: 132px; height: 132px; flex: none; }
+.engine-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.engine-ring .track { fill: none; stroke: var(--line); stroke-width: 9; }
+.engine-ring .arc { fill: none; stroke-width: 9; stroke-linecap: butt; }
+.engine-ring .a0 { stroke: var(--accent); }
+.engine-ring .a1 { stroke: #4bc6a8; }
+.engine-ring .a2 { stroke: #9085e9; }
+.engine-ring .a3 { stroke: var(--warn); }
+.engine-ring .a4 { stroke: #d9737f; }
+.gemini-object.thinking .engine-ring .a0 { animation: engine-pulse 3.4s ease-in-out infinite; }
+@keyframes engine-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.engine-core {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 1px;
+}
+.engine-core .n { font: 700 22px var(--mono); color: var(--ink); }
+.engine-core .l { font: 9.5px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+.engine-read { flex: 1; min-width: 260px; }
+.engine-now { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-2); }
+.engine-figs { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.engine-figs b { color: var(--ink); font-family: var(--mono); }
+.engine-roles { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 3px; }
+.engine-roles li { display: flex; align-items: baseline; gap: 9px; font-size: 12px; }
+.engine-roles .key { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.engine-roles .key.a0 { background: var(--accent); }
+.engine-roles .key.a1 { background: #4bc6a8; }
+.engine-roles .key.a2 { background: #9085e9; }
+.engine-roles .key.a3 { background: var(--warn); }
+.engine-roles .key.a4 { background: #d9737f; }
+.engine-roles .rn { color: var(--ink-2); min-width: 74px; }
+.engine-roles .rc, .engine-roles .rm { font: 10.5px var(--mono); color: var(--muted); }
+.engine-roles .rm { margin-left: auto; }
+.engine-foot { margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .gemini-object.thinking .engine-ring .a0 { animation: none; } }

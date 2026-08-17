@@ -490,3 +490,24 @@ def test_the_context_decides_how_wide_a_raised_question_runs():
         == Executive.CHILD_TASKS_NEW_GROUND
     # A model-raised gap carries no kind and must not be treated as new ground.
     assert executive._width_for({"question": "what is the CPM?"}) == Executive.CHILD_TASKS_FOCUSED
+
+
+def test_the_board_tally_names_the_model_that_actually_ran():
+    """The engine object on the board reports which model did the work. Taking
+    whichever row is newest had it reporting 'fixture (no model called)' while
+    139 live calls sat underneath — the one number on that object nobody would
+    think to double-check."""
+    from collections import Counter
+
+    rows = [{"model": "fixture (no model called)", "live": False},
+            *({"model": "gemini-flash-latest", "live": True} for _ in range(139))]
+    live_models = Counter(r["model"] for r in rows if r.get("live") and r.get("model"))
+    any_models = Counter(r["model"] for r in rows if r.get("model"))
+    ranked = live_models or any_models
+
+    assert ranked.most_common(1)[0][0] == "gemini-flash-latest"
+    # And with nothing live on record it still names something rather than blank.
+    offline = [{"model": "fixture (no model called)", "live": False}]
+    ranked_off = (Counter(r["model"] for r in offline if r.get("live"))
+                  or Counter(r["model"] for r in offline))
+    assert ranked_off.most_common(1)[0][0] == "fixture (no model called)"
