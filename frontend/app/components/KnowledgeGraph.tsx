@@ -54,11 +54,17 @@ export interface Forces {
   pull: number;      // how strongly a node is held at its wire length
   push: number;      // how hard nodes hold each other off
   spacing: number;   // the distance below which push applies at all
-  glow: number;      // how strongly the wires are drawn
+  glow: number;      // how strongly the anchor wires are drawn
   colour: string;    // and in what colour
+  /* The other wire in the picture, and a different thing: an anchor wire says
+     "this node is held here", a connection says "one question learned about both
+     of these". They are coloured separately because they mean separately. */
+  edgeColour: string;
 }
-export const DEFAULT_FORCES: Forces =
-  { wire: 250, pull: 0.05, push: 1500, spacing: 90, glow: 0.16, colour: "#c0c6d4" };
+export const DEFAULT_FORCES: Forces = {
+  wire: 250, pull: 0.05, push: 1500, spacing: 90,
+  glow: 0.16, colour: "#c0c6d4", edgeColour: "#3987e5",
+};
 
 /* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
    perspective divide is what makes depth legible at all — without it a rotating
@@ -276,7 +282,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     try { localStorage.setItem(FORCES_KEY, JSON.stringify(forcesRef.current)); } catch { /* ignore */ }
     // A repaint is enough for a paint-only setting; the rest need the model to
     // move, and stepping when nothing has to move would jog a settled layout.
-    if (key === "glow" || key === "colour") { drawRef.current?.(); return; }
+    if (key === "glow" || key === "colour" || key === "edgeColour") { drawRef.current?.(); return; }
     // Settle and repaint on the spot rather than waiting for the animation loop.
     // The loop is not always there: reduced motion has none at all, and a
     // background tab has requestAnimationFrame suspended — in both cases the
@@ -381,9 +387,13 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       const fade = (n: Node) => 0.45 + 0.55 * (1 - Math.min(1, ((n.depth ?? 0) + DEPTH) / (DEPTH * 2)));
       // 390 edges across 106 nodes drawn at full strength is a grey mat that
       // buries the nodes. They are context, so they sit back until you point.
+      // One colour for both states, alpha doing the work: a chosen colour that
+      // only showed on the dim ones would barely be a choice, and the lit state is
+      // where connections are actually read — during a cycle, or on hover.
+      const edgeInk = forcesRef.current.edgeColour || accent;
       for (const { a: i, b: j } of edges) {
         const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
-        ctx.strokeStyle = lit ? accent : line;
+        ctx.strokeStyle = edgeInk;
         ctx.lineWidth = lit ? 1.6 : 1;
         const dim = Math.min(fade(nodes[i]), fade(nodes[j]));
         ctx.globalAlpha = (focus === null ? 0.38 : lit ? 0.9 : 0.14) * dim;
@@ -684,14 +694,19 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                      onChange={(e) => setForce("spacing", Number(e.target.value))} />
             </label>
             <label>
-              <span>wire strength<b>{forces.glow.toFixed(2)}</b></span>
+              <span>anchor strength<b>{forces.glow.toFixed(2)}</b></span>
               <input type="range" min={0.02} max={0.7} step={0.02} value={forces.glow}
                      onChange={(e) => setForce("glow", Number(e.target.value))} />
             </label>
             <label className="gf-colour">
-              <span>wire colour<b>{forces.colour}</b></span>
+              <span>anchor wires<b>{forces.colour}</b></span>
               <input type="color" value={forces.colour}
                      onChange={(e) => setForce("colour", e.target.value)} />
+            </label>
+            <label className="gf-colour">
+              <span>connections<b>{forces.edgeColour}</b></span>
+              <input type="color" value={forces.edgeColour}
+                     onChange={(e) => setForce("edgeColour", e.target.value)} />
             </label>
             <button className={`gf-tour${touring ? " on" : ""}`}
                     onClick={() => setTouring((t) => !t)}
