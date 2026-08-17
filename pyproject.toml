@@ -3,7 +3,8 @@ name = "genesis-parallel"
 version = "0.1.0"
 description = "Genesis OS — Signal Intelligence. Standalone external-intelligence system (Parallel track, Google Cloud Agentic Cinema Hackathon)."
 readme = "README.md"
-requires-python = ">=3.11"
+# 3.14 has no pydantic-core wheels; installs there fail in a Rust build.
+requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 dependencies = [
     "fastapi>=0.115",
