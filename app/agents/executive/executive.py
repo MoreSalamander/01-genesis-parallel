@@ -397,6 +397,13 @@ class SignalIntelligenceExecutive:
     # planned narrow (§: the planner still reasons once about the whole question,
     # the plan is taken at the width we pay for), and a raised mission never
     # deepens, so it cannot raise children of its own.
+    # A ceiling across the whole mission, not per round. Four questions a round
+    # over two rounds dispatched eight extra missions per question asked, each
+    # with its own planner, extraction, verification and synthesis calls — that
+    # exhausted the Vertex quota in one afternoon (429 RESOURCE_EXHAUSTED) and
+    # left thirteen dead missions on the board. Raising a question costs real
+    # money; the rest of the round's shortfalls are stated on the parent instead.
+    MAX_RAISED_PER_MISSION = 2
     CHILD_TASKS_FOCUSED = 2      # corroborate this, settle that — narrow by nature
     CHILD_TASKS_NEW_GROUND = 5   # nothing is known about this yet; two queries answers it badly
     # The kinds that can be new ground. The others are questions *about* something
@@ -453,15 +460,35 @@ class SignalIntelligenceExecutive:
             self._synthesize(child)
             self.complete(child)
         except Exception as err:
-            # A follow-up that fails is recorded as failed. It must not take the
-            # parent's answer down with it (§12).
+            # A nested question that fails is recorded as failed. It must not take
+            # the parent's answer down with it (§12).
             self._incomplete(child, f"Nested-question research failed: {err}")
         finally:
-            if self.missions is not None:
+            # Only a question that actually retrieved something becomes a mission
+            # on the board. Persisting the rest put thirteen empty INCOMPLETE rows
+            # in the Studio Head's list of questions — a failed attempt is not a
+            # question with an answer, and it belongs on the parent's timeline,
+            # which is where the failure is already recorded.
+            if self.missions is not None and child.sources:
                 self.missions.put(child)
         self.bus.emit("intelligence.raised", mission_id=child.id, raised_by=parent.id,
                       round=round_no, objective=child.objective)
         return child
+
+    @staticmethod
+    def _raised_count(mission: Mission) -> int:
+        """How many questions this mission has already dispatched, across rounds."""
+        total = 0
+        for stage in mission.stages:
+            if stage.name == "QUESTIONS RAISED":
+                head = stage.detail.split(" ", 1)[0]
+                total += int(head) if head.isdigit() else 0
+        return total
+
+    @staticmethod
+    def _out_of_quota(child: Mission) -> bool:
+        blob = (child.error or "").upper()
+        return "RESOURCE_EXHAUSTED" in blob or "429" in blob
 
     def _research_gaps(self, mission: Mission, gaps: list[dict], round_no: int) -> None:
         """Run each gap as its own mission, then fold what it found into this one.
@@ -476,12 +503,33 @@ class SignalIntelligenceExecutive:
         added = 0
         raised: list[str] = []
 
+        budget = self.MAX_RAISED_PER_MISSION - self._raised_count(mission)
+
         for gap in gaps:
             question = gap["question"]
+            if budget <= 0:
+                # Out of budget. The shortfall is still named on the answer; what
+                # it does not do is spend another mission's worth of quota.
+                mission.stage(
+                    "SHORTFALL STATED",
+                    f"{question[:110]} — named rather than researched: this answer has already "
+                    f"raised {self.MAX_RAISED_PER_MISSION} questions of its own",
+                )
+                continue
             child = self._raise_as_mission(mission, gap, round_no)
             if child is None:
                 mission.stage("NESTED QUESTION FAILED", f"{question[:80]} — nothing came back")
                 continue
+            if self._out_of_quota(child):
+                # The model is rate-limited. Raising more questions now produces
+                # more dead missions, so stop and say so.
+                mission.stage(
+                    "RAISING PAUSED",
+                    "The model is out of quota, so no further questions were raised from this "
+                    "answer. What is missing is named above rather than filled in.",
+                )
+                break
+            budget -= 1
             raised.append(child.id)
             self.knowledge.relate(
                 "gap", question[:180], "answered by", "objective", child.id, mission.id

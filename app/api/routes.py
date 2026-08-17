@@ -100,8 +100,20 @@ def create_mission(body: MissionRequest, background: BackgroundTasks) -> dict:
 
 
 @router.get("/missions")
-def list_missions() -> list[dict]:
-    return [_summary(m) for m in get_runtime().working.all()]
+def list_missions(include_failed_raised: bool = False) -> list[dict]:
+    """The questions asked, and answered.
+
+    A question the system raised that retrieved nothing is left out by default.
+    Thirteen of them appeared on the board when a quota failure killed each one
+    mid-dispatch, and an empty INCOMPLETE row is not a question with an answer —
+    the failure is recorded on the timeline of the answer that raised it, which is
+    where it means something. The parent's own failures are never hidden, and
+    `include_failed_raised=true` returns everything for auditing.
+    """
+    missions = get_runtime().working.all()
+    if not include_failed_raised:
+        missions = [m for m in missions if not (m.raised_by and not m.sources)]
+    return [_summary(m) for m in missions]
 
 
 @router.get("/missions/{mission_id}")

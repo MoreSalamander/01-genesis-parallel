@@ -621,3 +621,46 @@ def test_the_tracker_shows_only_what_is_being_worked_on():
     dead = Mission(objective="Unanswerable?", raised_by="msn_parent")
     dead.status = MissionStatus.INCOMPLETE
     assert dead.status not in working_states
+
+
+def test_raising_questions_is_capped_and_stops_when_the_model_is_out_of_quota():
+    """Dispatching a nested question costs a mission's worth of model calls. Four
+    a round over two rounds spent eight of them per question asked, which
+    exhausted the Vertex quota in an afternoon (429 RESOURCE_EXHAUSTED) and left
+    thirteen dead missions on the board.
+
+    So: a ceiling across the whole mission, and a hard stop the moment the model
+    reports it is out — because every further question would produce another dead
+    mission."""
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+
+    assert Executive.MAX_RAISED_PER_MISSION <= 3, "the fan-out is wide enough to exhaust a quota"
+
+    # The ceiling counts across rounds, read off what the mission already did.
+    mission = Mission(objective="test")
+    mission.stage("QUESTIONS RAISED", "2 nested questions asked as missions of their own")
+    assert Executive._raised_count(mission) == 2
+    mission.stage("QUESTIONS RAISED", "1 nested question asked as a mission of its own")
+    assert Executive._raised_count(mission) == 3, "a second round must not reset the budget"
+
+    # A quota failure is recognised from the child's own recorded error.
+    dead = Mission(objective="q")
+    dead.error = "Nested-question research failed: 429 RESOURCE_EXHAUSTED. {'error': ...}"
+    assert Executive._out_of_quota(dead)
+    healthy = Mission(objective="q")
+    healthy.error = "Nested-question research failed: connection reset"
+    assert not Executive._out_of_quota(healthy), "only quota exhaustion stops the raising"
+
+
+def test_a_question_that_retrieved_nothing_does_not_reach_the_board():
+    """Thirteen empty INCOMPLETE rows appeared in the Studio Head's question list
+    because every dispatched child was persisted whether or not it found anything.
+    A failed attempt is not a question with an answer; it belongs on the parent's
+    timeline, where the failure is already recorded."""
+    import inspect
+
+    from app.agents.executive.executive import SignalIntelligenceExecutive as Executive
+
+    src = inspect.getsource(Executive._raise_as_mission)
+    assert "if self.missions is not None and child.sources:" in src, \
+        "an empty nested question is still being written to the board"
