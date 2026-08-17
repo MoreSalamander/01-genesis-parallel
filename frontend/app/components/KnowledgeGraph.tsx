@@ -308,8 +308,13 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                 first seen {new Date(entity.first_seen).toLocaleDateString()}
               </p>
               <ul className="gd-claims">
-                {entity.assertions.map((a) => (
-                  <li key={a.claim_id} className={a.disputed ? "disputed" : ""}>
+                {/* One claim is one thing the studio knows, and the store now
+                    enforces that on write. The index still rides in the key: a
+                    duplicate in the data is a bug to fix in the store, not a
+                    reason for this panel to drop or duplicate rows while it is
+                    being fixed. */}
+                {entity.assertions.map((a, i) => (
+                  <li key={`${a.claim_id}-${i}`} className={a.disputed ? "disputed" : ""}>
                     <span className={`gd-state ${a.status}`}>{STATE_WORD[a.status] ?? a.status}</span>
                     <span className="gd-claim">{a.claim}</span>
                     <span className="gd-src">

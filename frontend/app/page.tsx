@@ -8,6 +8,7 @@ import {
 import { HowThisWorks } from "./components/HowThisWorks";
 import { ContextGraph } from "./components/ContextGraph";
 import { FleetSpheres } from "./components/FleetSpheres";
+import { VitalsCharts } from "./components/VitalsCharts";
 import { NestedQuestions } from "./components/NestedQuestions";
 import { GeminiObject } from "./components/GeminiObject";
 import { KnowledgeGraph } from "./components/KnowledgeGraph";
@@ -182,6 +183,7 @@ export default function Board() {
             <Readout n={claims} label="claims made" />
             <Readout n={status?.episodic ?? 0} label="things it remembers" />
           </div>
+          <VitalsCharts running={running} />
           <p className="vitals-note">
             Disputed is not a failure. When sources disagree the researcher keeps both and tells
             you, rather than picking the one that reads better.

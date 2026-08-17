@@ -167,6 +167,84 @@ def agents() -> dict:
     return roster.roster()
 
 
+@router.get("/vitals")
+def vitals() -> dict:
+    """How the research is holding up, in the shapes it actually has.
+
+    Three percentages could not say the thing that matters most: *how much of
+    this rests on one page*. A studio deciding on this needs the distribution,
+    not the average — 500 confirmed claims reads well until you see that 700 more
+    were said once and never corroborated.
+
+    Every figure is counted from the missions themselves. A claim is attributed to
+    a line of enquiry through the provenance on its evidence, so a claim assembled
+    from two domains counts under both — which is why the domain totals do not sum
+    to the claim total, and the console says so rather than hiding it.
+    """
+    from app.models.evidence import VerificationStatus
+
+    runtime = get_runtime()
+    missions = runtime.working.all()
+
+    verified = conflicted = unverified = 0
+    depth = {"1": 0, "2": 0, "3": 0, "4+": 0}
+    by_domain: dict[str, dict[str, int]] = {}
+    findings_total = findings_supported = 0
+    confidence: list[float] = []
+
+    for mission in missions:
+        evidence_domain = {
+            e.id: str(e.provenance.get("domain", "")) for e in mission.evidence
+        }
+        verified_ids = {
+            c.id for c in mission.claims
+            if c.status in (VerificationStatus.VERIFIED, VerificationStatus.CONFLICTED)
+        }
+        for claim in mission.claims:
+            if claim.status == VerificationStatus.VERIFIED:
+                verified += 1
+            elif claim.status == VerificationStatus.CONFLICTED:
+                conflicted += 1
+            else:
+                unverified += 1
+
+            sources = max(1, claim.corroborating_sources)
+            depth["4+" if sources >= 4 else str(sources)] += 1
+
+            for evidence_id in claim.evidence_ids:
+                domain = evidence_domain.get(evidence_id)
+                if not domain:
+                    continue
+                bucket = by_domain.setdefault(domain, {"claims": 0, "held": 0})
+                bucket["claims"] += 1
+                if claim.status == VerificationStatus.VERIFIED:
+                    bucket["held"] += 1
+                break        # one claim, one attribution: its first recorded source
+
+        findings_total += len(mission.findings)
+        findings_supported += sum(
+            1 for f in mission.findings if any(cid in verified_ids for cid in f.claim_ids)
+        )
+        if mission.recommendation:
+            confidence.append(float(mission.recommendation.confidence))
+
+    return {
+        "claims": {"verified": verified, "conflicted": conflicted, "unverified": unverified},
+        "depth": depth,
+        "domains": [
+            {"domain": name, "claims": v["claims"], "held": v["held"]}
+            for name, v in sorted(by_domain.items())
+        ],
+        "findings": {"total": findings_total, "supported": findings_supported},
+        "confidence": {
+            "n": len(confidence),
+            "mean": round(sum(confidence) / len(confidence), 3) if confidence else 0.0,
+            "low": round(min(confidence), 3) if confidence else 0.0,
+            "high": round(max(confidence), 3) if confidence else 0.0,
+        },
+    }
+
+
 @router.get("/nested-questions")
 def nested_questions(limit: int = 40) -> list[dict]:
     """The questions the system raised from its own answers, newest first.

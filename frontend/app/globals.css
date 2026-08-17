@@ -977,3 +977,72 @@ td.num { font-variant-numeric: tabular-nums; }
   display: block; font-size: 10px; color: var(--muted); opacity: 0.85;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+
+/* --- how the research is holding up (components/VitalsCharts.tsx) -----------
+   Bar length carries magnitude; text carries identity. One hue, deliberately:
+   the four domain colours failed colourblind separation on this surface once
+   darkened into the legible band, and the domain names are written beside their
+   bars anyway. Colour means something in exactly one chart here — the status
+   mix — and every segment there carries its own words and number. */
+.vitals-charts { margin-top: 14px; display: grid; gap: 16px; }
+.vc { margin: 0; }
+.vc figcaption {
+  font: 700 9.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-2); margin-bottom: 7px; display: flex; flex-wrap: wrap; gap: 8px;
+  align-items: baseline;
+}
+.vc figcaption .sub {
+  letter-spacing: 0; text-transform: none; font-weight: 400; font-size: 10.5px;
+  color: var(--warn);
+}
+.vc-note { margin: 7px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+
+/* the status mix: one bar, 2px surface gaps between segments */
+.mix { display: flex; height: 12px; border-radius: 3px; overflow: hidden; gap: 2px; }
+.mix .seg { display: block; min-width: 2px; }
+.mix .seg.ok   { background: var(--good); }
+.mix .seg.warn { background: var(--warn); }
+.mix .seg.thin { background: color-mix(in srgb, var(--muted) 55%, var(--surface-2)); }
+.mix-key { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 3px; }
+.mix-key li { display: flex; align-items: baseline; gap: 7px; font-size: 12px; color: var(--ink-2); }
+.mix-key .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.mix-key .dot.ok { background: var(--good); }
+.mix-key .dot.warn { background: var(--warn); }
+.mix-key .dot.thin { background: color-mix(in srgb, var(--muted) 55%, var(--surface-2)); }
+.mix-key b { color: var(--ink); font-family: var(--mono); }
+.mix-key .p { margin-left: auto; font: 10.5px var(--mono); color: var(--muted); }
+
+/* corroboration depth: vertical bars, 4px rounded ends on the baseline */
+.bars { display: flex; align-items: flex-end; gap: 10px; height: 96px; }
+.bar-col { flex: 1; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; height: 100%; }
+.bar-col .bn { font: 10.5px var(--mono); color: var(--ink-2); }
+.bar-col .bar {
+  width: 100%; max-width: 34px; align-self: end; min-height: 2px;
+  background: var(--accent); border-radius: 4px 4px 0 0;
+}
+.bar-col .bl { margin-top: 5px; font: 10px var(--mono); color: var(--muted); }
+
+/* per-domain: horizontal bars, the filled part is what held up */
+.hbars { list-style: none; padding: 0; margin: 0; display: grid; gap: 5px; }
+.hbars li { display: grid; grid-template-columns: 62px 1fr 74px; align-items: center; gap: 8px; }
+.hbars .hl { font: 10.5px var(--mono); color: var(--ink-2); text-transform: capitalize; }
+.hbars .htrack { position: relative; height: 10px; }
+.hbars .hbar {
+  position: absolute; inset: 0 auto 0 0; height: 100%;
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface-2));
+  border-radius: 3px;
+}
+.hbars .hheld {
+  position: absolute; inset: 0 auto 0 0; height: 100%;
+  background: var(--accent); border-radius: 3px;
+}
+.hbars .hn { font: 10.5px var(--mono); color: var(--ink); text-align: right; }
+.hbars .hn .of { color: var(--muted); }
+.hbars .hn .p { margin-left: 6px; color: var(--muted); }
+
+.vc-figs {
+  display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid var(--line);
+  font-size: 12px; color: var(--ink-2);
+}
+.vc-figs b { color: var(--ink); font-family: var(--mono); }

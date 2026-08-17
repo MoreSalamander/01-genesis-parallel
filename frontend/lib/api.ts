@@ -116,6 +116,18 @@ export interface FleetTally {
 }
 export const getFleet = () => api<FleetTally>("/api/fleet");
 
+/** How the research is holding up, in distributions rather than averages.
+ *  A claim is attributed to one line of enquiry — the first source that produced
+ *  it — so `domains` are shares of the same total, not double counted. */
+export interface VitalsReport {
+  claims: { verified: number; conflicted: number; unverified: number };
+  depth: { "1": number; "2": number; "3": number; "4+": number };
+  domains: { domain: string; claims: number; held: number }[];
+  findings: { total: number; supported: number };
+  confidence: { n: number; mean: number; low: number; high: number };
+}
+export const getVitals = () => api<VitalsReport>("/api/vitals");
+
 /** A question the system raised from its own answer. Recorded when it is raised,
  *  so these exist whether or not the question was also dispatched as its own
  *  mission — which is why the tracker reads these and not `raised_by`. */
