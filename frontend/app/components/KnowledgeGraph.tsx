@@ -50,12 +50,13 @@ const FOCAL = 900;          // perspective strength: larger is flatter
 const SUN_R = 74;              // how far the contested mass spreads from the anchor
 
 export interface Forces {
-  wire: number;      // length of the wire to the anchor — the disc's radius
+  wire: number;      // length of the wire to the anchor — the shell's radius
   pull: number;      // how strongly a node is held at its wire length
   push: number;      // how hard nodes hold each other off
   spacing: number;   // the distance below which push applies at all
+  glow: number;      // how strongly the wires are drawn
 }
-export const DEFAULT_FORCES: Forces = { wire: 250, pull: 0.05, push: 1500, spacing: 90 };
+export const DEFAULT_FORCES: Forces = { wire: 250, pull: 0.05, push: 1500, spacing: 90, glow: 0.16 };
 
 /* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
    perspective divide is what makes depth legible at all — without it a rotating
@@ -245,6 +246,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     forcesRef.current = { ...forcesRef.current, [key]: value };
     setForces(forcesRef.current);
     try { localStorage.setItem(FORCES_KEY, JSON.stringify(forcesRef.current)); } catch { /* ignore */ }
+    // A repaint is enough for a paint-only setting; the rest need the model to
+    // move, and stepping when nothing has to move would jog a settled layout.
+    if (key === "glow") { drawRef.current?.(); return; }
     // Settle and repaint on the spot rather than waiting for the animation loop.
     // The loop is not always there: reduced motion has none at all, and a
     // background tab has requestAnimationFrame suspended — in both cases the
@@ -361,11 +365,16 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       // because four hundred of them at full strength is a solid disc of line.
       const anchor = project(
         { x: W / 2, y: H / 2, z: 0, r: 0 } as Node, yaw, pitch);
+      // Drawn in ink rather than in the line colour, and at an adjustable
+      // strength. The panel behind the canvas is #171c27, so the old --line
+      // (#232936) had 1.17:1 against it and was effectively invisible; black
+      // measures 1.23:1, which is the same nothing. Ink is 9.96:1, which is why
+      // it can be faint and still be seen — six hundred wires need to be faint.
       ctx.lineWidth = 1;
       for (const n of order) {
         const lit = focus !== null && n.id === focus;
-        ctx.strokeStyle = lit ? accent : line;
-        ctx.globalAlpha = (lit ? 0.85 : 0.13) * fade(n);
+        ctx.strokeStyle = lit ? accent : ink;
+        ctx.globalAlpha = (lit ? 0.9 : forcesRef.current.glow) * fade(n);
         ctx.beginPath();
         ctx.moveTo(anchor.sx, anchor.sy);
         ctx.lineTo(n.sx!, n.sy!);
@@ -595,6 +604,11 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               <span>keep apart within<b>{forces.spacing}</b></span>
               <input type="range" min={30} max={200} step={5} value={forces.spacing}
                      onChange={(e) => setForce("spacing", Number(e.target.value))} />
+            </label>
+            <label>
+              <span>wire strength<b>{forces.glow.toFixed(2)}</b></span>
+              <input type="range" min={0.02} max={0.7} step={0.02} value={forces.glow}
+                     onChange={(e) => setForce("glow", Number(e.target.value))} />
             </label>
             <button className="gf-reset" onClick={() => {
               forcesRef.current = { ...DEFAULT_FORCES };
