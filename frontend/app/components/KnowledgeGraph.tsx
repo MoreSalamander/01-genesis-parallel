@@ -87,7 +87,7 @@ export const DEFAULT_FORCES: Forces = {
    perspective divide is what makes depth legible at all — without it a rotating
    graph is just a graph that wobbles. `k` is the scale at that depth, so a node's
    radius, its edges and its hit target all shrink together and stay consistent. */
-function project(n: Node, yaw: number, pitch: number) {
+function project(n: Node, yaw: number, pitch: number, zoom = 1) {
   const dx = n.x - W / 2, dy = n.y - H / 2, dz = n.z;
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
   const x1 = dx * cy - dz * sy;
@@ -95,7 +95,11 @@ function project(n: Node, yaw: number, pitch: number) {
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const y1 = dy * cp - z1 * sp;
   const z2 = dy * sp + z1 * cp;
-  const k = FOCAL / (FOCAL + z2);
+  /* Zoom multiplies the projected offset and the scale together, so a node's
+     radius, its wires and its hit target all grow with it and stay consistent —
+     the same reason the perspective divide returns `k` rather than being applied
+     piecemeal. */
+  const k = (FOCAL / (FOCAL + z2)) * zoom;
   return { sx: W / 2 + x1 * k, sy: H / 2 + y1 * k, k, z: z2 };
 }
 
@@ -281,6 +285,16 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   // Tipped slightly down the whole time, so the rotation reads as a body turning
   // rather than as a flat ring spinning.
   const pitchRef = useRef(-0.22);
+  /* Zoom is a view setting, like the camera angle: held in a ref so changing it
+     never re-runs the layout effect, and not persisted, because coming back to a
+     graph you left zoomed into a corner is disorienting rather than helpful. */
+  const zoomRef = useRef(1);
+  const [zoom, setZoom] = useState(1);
+  const setZoomTo = (next: number) => {
+    zoomRef.current = Math.max(0.35, Math.min(4, next));
+    setZoom(zoomRef.current);
+    drawRef.current?.();     // works with no animation loop: reduced motion, hidden tab
+  };
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   // Forces in a ref, mirrored into state only so the sliders can show their own
   // values: as a dependency they would tear down and rebuild the model on every
@@ -422,7 +436,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       // reads as flat noise rather than as a body with an inside.
       const yaw = yawRef.current, pitch = pitchRef.current;
       for (const n of nodes) {
-        const p = project(n, yaw, pitch);
+        const p = project(n, yaw, pitch, zoomRef.current);
         n.sx = p.sx; n.sy = p.sy; n.sr = Math.max(1.5, n.r * p.k); n.depth = p.z;
       }
       const order = [...nodes].sort((a, b) => (b.depth ?? 0) - (a.depth ?? 0));
@@ -436,7 +450,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       // structure.
       // because four hundred of them at full strength is a solid disc of line.
       const anchor = project(
-        { x: W / 2, y: H / 2, z: 0, r: 0 } as Node, yaw, pitch);
+        { x: W / 2, y: H / 2, z: 0, r: 0 } as Node, yaw, pitch, zoomRef.current);
       // Drawn in ink rather than in the line colour, and at an adjustable
       // strength. The panel behind the canvas is #171c27, so the old --line
       // (#232936) had 1.17:1 against it and was effectively invisible; black
@@ -518,8 +532,12 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         ctx.fill();
         // The ring carries the node's own colour — amber still means disputed
         // while the fill is showing the connection — at the node's own transparency.
+        /* The ring is solid whatever the fill is doing. A see-through node still
+           has to have a definite edge — that is what makes it a node rather than a
+           smudge, and it is what lets the fill be as faint as 26% without the node
+           disappearing. So: transparent interior, solid outline. */
         ctx.strokeStyle = colour;
-        ctx.globalAlpha = n.disputed || inConnection ? 1 : (on ? 0.85 : 0.5) * depth;
+        ctx.globalAlpha = 1;
         ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
         ctx.stroke();
         if (on) {                                   // selection ring
@@ -649,6 +667,25 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     selectedRef.current = selected;
     drawRef.current?.();
   }, [selected, hoverName]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    /* Attached directly rather than through React's onWheel, which is registered
+       passive — preventDefault there is ignored and the page scrolls away under
+       the cursor while the graph zooms. */
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setZoomTo(zoomRef.current * (event.deltaY < 0 ? 1.12 : 1 / 1.12));
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+    /* Depends on names.length because this component returns null until the
+       entities arrive: with an empty dependency list the effect ran once while
+       there was no canvas, attached nothing, and the wheel did nothing for the
+       rest of the session. The buttons worked, which is exactly what made it look
+       like a wheel problem rather than a mounting one. */
+  }, [names.length]);
 
   useEffect(() => {
     if (!touring) { tourNodeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
@@ -798,6 +835,13 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               <input type="range" min={0.4} max={4} step={0.2} value={forces.edgeWidth}
                      onChange={(e) => setForce("edgeWidth", Number(e.target.value))} />
             </label>
+            <div className="gf-zoom" role="group" aria-label="Zoom">
+              <button onClick={() => setZoomTo(zoomRef.current / 1.25)}
+                      title="Zoom out">−</button>
+              <span className="gz-at">{Math.round(zoom * 100)}%</span>
+              <button onClick={() => setZoomTo(zoomRef.current * 1.25)}
+                      title="Zoom in — or scroll on the graph">+</button>
+            </div>
             <div className="gf-shape" role="group" aria-label="Arrangement">
               {(["sphere", "plane"] as const).map((option) => (
                 <button
@@ -825,6 +869,8 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               // reason the arrangement "did not change" when it did.
               yawRef.current = 0.5;
               pitchRef.current = -0.22;
+              zoomRef.current = 1;
+              setZoom(1);
               try {
                 localStorage.removeItem(FORCES_KEY);
                 localStorage.removeItem(LAYOUT_KEY);

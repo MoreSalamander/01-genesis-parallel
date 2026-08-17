@@ -1471,3 +1471,15 @@ td.num { font-variant-numeric: tabular-nums; }
 .gf-shape button + button { border-left: 1px solid var(--line); }
 .gf-shape button:hover { color: var(--ink); }
 .gf-shape button.on { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.gf-zoom { display: flex; align-self: end; align-items: stretch;
+  border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.gf-zoom button {
+  cursor: pointer; background: none; border: 0; padding: 2px 9px;
+  font: 13px var(--mono); line-height: 1; color: var(--muted);
+}
+.gf-zoom button:hover { color: var(--ink); }
+.gz-at {
+  display: grid; place-items: center; min-width: 42px; padding: 0 4px;
+  border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+  font: 9.5px var(--mono); color: var(--ink-2);
+}
