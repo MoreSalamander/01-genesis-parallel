@@ -348,6 +348,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     const warn = css.getPropertyValue("--warn").trim() || "#fab219";
     const line = css.getPropertyValue("--line").trim() || "#232936";
     const ink = css.getPropertyValue("--ink-2").trim() || "#c0c6d4";
+    // The panel the canvas sits on. Needed because a node is drawn translucent,
+    // so without an opaque backing it takes the colour of whatever is behind it.
+    const panel = css.getPropertyValue("--surface-2").trim() || "#171c27";
     const dpr = window.devicePixelRatio || 1;
     canvas.width = W * dpr; canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -385,25 +388,12 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       const order = [...nodes].sort((a, b) => (b.depth ?? 0) - (a.depth ?? 0));
       // Distance fade, kept subtle: depth should be felt, not performed.
       const fade = (n: Node) => 0.45 + 0.55 * (1 - Math.min(1, ((n.depth ?? 0) + DEPTH) / (DEPTH * 2)));
-      // 390 edges across 106 nodes drawn at full strength is a grey mat that
-      // buries the nodes. They are context, so they sit back until you point.
-      // One colour for both states, alpha doing the work: a chosen colour that
-      // only showed on the dim ones would barely be a choice, and the lit state is
-      // where connections are actually read — during a cycle, or on hover.
-      const edgeInk = forcesRef.current.edgeColour || accent;
-      for (const { a: i, b: j } of edges) {
-        const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
-        ctx.strokeStyle = edgeInk;
-        ctx.lineWidth = lit ? 1.6 : 1;
-        const dim = Math.min(fade(nodes[i]), fade(nodes[j]));
-        ctx.globalAlpha = (focus === null ? 0.38 : lit ? 0.9 : 0.14) * dim;
-        ctx.beginPath();
-        ctx.moveTo(nodes[i].sx!, nodes[i].sy!);
-        ctx.lineTo(nodes[j].sx!, nodes[j].sy!);
-        ctx.stroke();
-      }
-      // The wires. Every node is tied to the same anchor, which is what makes the
-      // disc read as held rather than floating — drawn under the nodes and faint,
+      // The anchor wires, drawn first and so underneath everything. They are
+      // structure — "this node is held here" — and 643 of them radiating from one
+      // point will paint over anything drawn before them, which is exactly what
+      // happened to the connections: they were rendered, then buried, so changing
+      // their colour appeared to do nothing at all. Meaning goes on top of
+      // structure.
       // because four hundred of them at full strength is a solid disc of line.
       const anchor = project(
         { x: W / 2, y: H / 2, z: 0, r: 0 } as Node, yaw, pitch);
@@ -428,6 +418,23 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       ctx.arc(anchor.sx, anchor.sy, 3.5 * anchor.k, 0, Math.PI * 2);
       ctx.fillStyle = ink; ctx.fill();
 
+      // 390 edges across 106 nodes drawn at full strength is a grey mat that
+      // buries the nodes. They are context, so they sit back until you point.
+      // One colour for both states, alpha doing the work: a chosen colour that
+      // only showed on the dim ones would barely be a choice, and the lit state is
+      // where connections are actually read — during a cycle, or on hover.
+      const edgeInk = forcesRef.current.edgeColour || accent;
+      for (const { a: i, b: j } of edges) {
+        const lit = focus !== null && (nodes[i].id === focus || nodes[j].id === focus);
+        ctx.strokeStyle = edgeInk;
+        ctx.lineWidth = lit ? 1.6 : 1;
+        const dim = Math.min(fade(nodes[i]), fade(nodes[j]));
+        ctx.globalAlpha = (focus === null ? 0.38 : lit ? 0.9 : 0.14) * dim;
+        ctx.beginPath();
+        ctx.moveTo(nodes[i].sx!, nodes[i].sy!);
+        ctx.lineTo(nodes[j].sx!, nodes[j].sy!);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
       for (const n of order) {
         const on = n.id === sel || n.id === focus;
@@ -447,6 +454,15 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
            hollow is legible at a glance, and it keeps the amber/accent meaning —
            what fills is still coloured by whether it is disputed. */
         const inConnection = focus !== null && related;
+        /* Backed with the panel colour before its own is applied. A node is drawn
+           at 26% when it is not part of what is being shown, which means anything
+           behind it shows through — and with the connections now painting over the
+           anchor wires, that was the connection colour: pick red for connections
+           and the nodes went red with them. A node has to look like itself
+           whatever is behind it, so the disc is made opaque first. */
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = panel;
+        ctx.fill();
         ctx.fillStyle = colour;
         ctx.globalAlpha = inConnection ? 1 : on ? 0.5 : 0.26;
         ctx.fill();
