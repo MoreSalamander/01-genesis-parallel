@@ -24,11 +24,11 @@ interface Node {
   sx?: number; sy?: number; sr?: number; depth?: number;   // last projection
 }
 
-const W = 720;
-const H = 340;
+const W = 1080;
+const H = 560;
 const TICKS = 260;
-const DEPTH = 300;          // how far back the far wall sits
-const FOCAL = 620;          // perspective strength: larger is flatter
+const DEPTH = 400;          // how far back the far wall sits
+const FOCAL = 900;          // perspective strength: larger is flatter
 
 /* The shape is a claim, so it says something true.
 
@@ -43,9 +43,9 @@ const FOCAL = 620;          // perspective strength: larger is flatter
    shell and fill the frame again. These are the semi-axes of the skin, and the
    maths below works in normalised ellipsoid space so one scalar can say which
    shell a node belongs on regardless of direction. */
-const RX = 286;
-const RY = 142;
-const RZ = 232;
+const RX = 430;
+const RY = 236;
+const RZ = 320;
 /* How deep the core sits, as a fraction of the skin. */
 const CORE_F = 0.46;
 /* The pull has to beat the repulsion of every other node, and at this size that
@@ -87,12 +87,12 @@ function build(entities: Record<string, KnowledgeEntity>) {
     const theta = golden * i;
     return {
       id: name,
-      x: W / 2 + Math.cos(theta) * ring * 120,
-      y: H / 2 + yUnit * 90,
-      z: Math.sin(theta) * ring * DEPTH * 0.5,
+      x: W / 2 + Math.cos(theta) * ring * RX * 0.8,
+      y: H / 2 + yUnit * RY * 0.8,
+      z: Math.sin(theta) * ring * RZ * 0.8,
       vx: 0, vy: 0, vz: 0,
       claims: assertions.length,
-      r: Math.min(18, 7 + assertions.length * 1.6),
+      r: Math.min(24, 9 + assertions.length * 2),
       disputed: assertions.some((a) => a.disputed),
     };
   });
@@ -209,7 +209,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
     // every label at once is a 6px mat of overlapping text at 106 entities.
     // Name the ones carrying the most, and let hover name the rest.
     const labelled = new Set(
-      [...nodes].sort((a, b) => b.claims - a.claims).slice(0, 12).map((n) => n.id),
+      [...nodes].sort((a, b) => b.claims - a.claims).slice(0, 20).map((n) => n.id),
     );
 
     const draw = () => {
@@ -270,7 +270,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         }
         if (labelled.has(n.id) || related) {
           ctx.fillStyle = on ? css.getPropertyValue("--ink").trim() || "#fff" : ink;
-          ctx.font = `${on ? "600 " : ""}13px ui-sans-serif, system-ui, sans-serif`;
+          ctx.font = `${on ? "600 " : ""}15px ui-sans-serif, system-ui, sans-serif`;
           ctx.textAlign = "center";
           ctx.fillText(n.id.length > 22 ? `${n.id.slice(0, 21)}…` : n.id,
                        n.sx!, n.sy! + n.sr! + 14);

@@ -151,7 +151,13 @@ export default function Board() {
         {error && <p className="muted">{error}</p>}
       </Panel>
 
-      {/* The wall: what it has learned, what it knows, what it is doing. */}
+      {/* The world model gets the full width. In the wall's middle column it was
+          rendering a 720-wide canvas into about 184 CSS pixels — the detail list
+          took 300 of the 502 that column had — so the studio's central instrument
+          was the smallest thing on the board. */}
+      <KnowledgeGraph running={running} />
+
+      {/* The wall: what holds up, and what it is doing right now. */}
       <div className="wall">
         <Panel title="How the research is holding up" className="vitals">
           <div className="ring-row">
@@ -189,10 +195,6 @@ export default function Board() {
             you, rather than picking the one that reads better.
           </p>
         </Panel>
-
-        <div className="centre">
-          <KnowledgeGraph running={running} />
-        </div>
 
         <Panel
           title="Live activity"

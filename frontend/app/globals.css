@@ -473,7 +473,9 @@ td.num { font-variant-numeric: tabular-nums; }
 
 /* ── Graphs you can interrogate ──────────────────────────────────────────── */
 .graph-panel { margin-top: 22px; }
-.graph-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+/* The canvas takes what it needs and the entity list stays a sidebar. At full
+   width this gives the graph roughly 780px instead of 184. */
+.graph-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
 @media (max-width: 900px) { .graph-layout { grid-template-columns: 1fr; } }
 .graph-legend { font-size: 11.5px; line-height: 1.6; color: var(--muted); margin: 8px 0 0; }
 
@@ -605,7 +607,9 @@ td.num { font-variant-numeric: tabular-nums; }
 /* The wall: vitals · central instrument · live activity */
 .wall {
   display: grid; gap: 14px; align-items: start;
-  grid-template-columns: minmax(228px, 286px) minmax(0, 1fr) minmax(228px, 286px);
+  /* Two columns now the world model has its own row above: vitals carry charts
+     and want the room, live activity is a narrow ticker. */
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
 }
 @media (max-width: 1240px) { .wall { grid-template-columns: 1fr; } }
 .centre { min-width: 0; }
