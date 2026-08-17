@@ -59,6 +59,27 @@ const PLANE_FLATTEN = 0.6;
    instead of thickening it. */
 const PLANE_DAMP = 0.22;
 
+/* The contested mass is lit from its middle: an amber node's colour is read off how
+   far it sits from the anchor, lightest at the centre and darkest at the rim. It is
+   the one place in this graph where colour carries position rather than state — and
+   it earns it, because a flat mass of six hundred identical ambers has no readable
+   inside, while a lit one shows its own density.
+
+   Interpolated in sRGB, which is not perceptually even, but the two ends are the
+   same hue at different lightness so there is no hue shift to go wrong. */
+const AMBER_CORE: [number, number, number] = [255, 232, 168];
+const AMBER_RIM: [number, number, number] = [166, 110, 8];
+
+function amberAt(distance: number, span: number): string {
+  /* Normalised against the mass's own reach rather than against SUN_R. The
+     contested nodes push each other well past that radius — with SUN_R as the
+     denominator nearly all of them clamped to 1 and the whole mass came out the
+     rim colour, which is a gradient in the code and a flat dark blob on screen. */
+  const t = Math.max(0, Math.min(1, distance / Math.max(1, span)));
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * t);
+  return `rgb(${mix(AMBER_CORE[0], AMBER_RIM[0])},${mix(AMBER_CORE[1], AMBER_RIM[1])},${mix(AMBER_CORE[2], AMBER_RIM[2])})`;
+}
+
 export interface Forces {
   wire: number;      // length of the wire to the anchor — the shell's radius
   pull: number;      // how strongly a node is held at its wire length
@@ -440,6 +461,14 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         n.sx = p.sx; n.sy = p.sy; n.sr = Math.max(1.5, n.r * p.k); n.depth = p.z;
       }
       const order = [...nodes].sort((a, b) => (b.depth ?? 0) - (a.depth ?? 0));
+      // How far the contested mass actually reaches this frame, so its lighting
+      // spans the mass that exists rather than the one the constant describes.
+      let sunSpan = SUN_R;
+      for (const n of nodes) {
+        if (!n.disputed) continue;
+        const dist = Math.hypot(n.x - W / 2, n.y - H / 2, n.z);
+        if (dist > sunSpan) sunSpan = dist;
+      }
       // Distance fade, kept subtle: depth should be felt, not performed.
       const fade = (n: Node) => 0.45 + 0.55 * (1 - Math.min(1, ((n.depth ?? 0) + DEPTH) / (DEPTH * 2)));
       // The anchor wires, drawn first and so underneath everything. They are
@@ -527,7 +556,11 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
 
            Everything else is transparent, and fills solid in the connection's
            colour only while it is part of the fan the sequence is holding. */
-        ctx.fillStyle = n.disputed ? warn : inConnection ? edgeInk : colour;
+        // Amber fills from the gradient by where it sits in the mass; everything
+        // else fills flat, in its own colour or the connection's.
+        ctx.fillStyle = n.disputed
+          ? amberAt(Math.hypot(n.x - W / 2, n.y - H / 2, n.z), sunSpan)
+          : inConnection ? edgeInk : colour;
         ctx.globalAlpha = n.disputed || inConnection ? 1 : (on ? 0.5 : 0.26) * depth;
         ctx.fill();
         // The ring carries the node's own colour — amber still means disputed
