@@ -20,21 +20,59 @@ import { Rolling, useReducedMotion } from "@/lib/alive";
 
 /* ── panel ───────────────────────────────────────────────────────────────── */
 
-export function Panel({ title, meta, className = "", children }: {
+export function Panel({ title, meta, className = "", foldId, defaultOpen = true, children }: {
   title?: string;
   meta?: React.ReactNode;
   className?: string;
+  /** Pass a stable key to make the panel foldable and remember the choice. */
+  foldId?: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  // Read the stored preference after mount rather than during render: reading
+  // localStorage while rendering makes the server and client disagree about the
+  // first paint, and React refuses to patch that tree.
+  useEffect(() => {
+    if (!foldId) return;
+    try {
+      const stored = localStorage.getItem(`genesis.panel.${foldId}`);
+      if (stored !== null) setOpen(stored === "1");
+    } catch { /* private mode — the default stands */ }
+  }, [foldId]);
+
+  const toggle = () => {
+    setOpen((was) => {
+      const next = !was;
+      try { localStorage.setItem(`genesis.panel.${foldId}`, next ? "1" : "0"); }
+      catch { /* preference simply is not remembered */ }
+      return next;
+    });
+  };
+
+  const foldable = Boolean(foldId);
+  const shown = !foldable || open;
+
   return (
-    <section className={`hud-panel ${className}`}>
+    <section className={`hud-panel${foldable && !open ? " folded" : ""} ${className}`}>
       {title && (
         <header className="hp-head">
-          <h2>{title}</h2>
+          {foldable ? (
+            <button type="button" className="hp-toggle" onClick={toggle}
+                    aria-expanded={open} aria-controls={`panel-${foldId}`}>
+              <span className="hp-caret" aria-hidden="true">▸</span>
+              <h2>{title}</h2>
+            </button>
+          ) : (
+            <h2>{title}</h2>
+          )}
+          {/* The summary stays visible when folded, so collapsing changes how
+              much room a panel takes and never whether you know what is in it. */}
           {meta && <span className="hp-meta">{meta}</span>}
         </header>
       )}
-      <div className="hp-body">{children}</div>
+      {shown && <div className="hp-body" id={foldable ? `panel-${foldId}` : undefined}>{children}</div>}
     </section>
   );
 }

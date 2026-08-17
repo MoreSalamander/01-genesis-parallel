@@ -697,3 +697,19 @@ td.num { font-variant-numeric: tabular-nums; }
 .centre .graph-layout { grid-template-columns: 1fr; gap: 12px; }
 .centre .graph-detail { max-height: 210px; overflow-y: auto; }
 .centre .graph-nodes { max-height: 118px; overflow-y: auto; }
+
+/* Folding a HUD panel. The header summary survives the fold. */
+.hp-toggle {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left;
+}
+.hp-toggle h2 { transition: color 160ms var(--alive-ease); }
+.hp-toggle:hover h2 { color: var(--ink); }
+.hp-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hp-caret {
+  display: inline-block; font-size: 9px; color: var(--muted); flex: none;
+  transform: rotate(90deg); transition: transform 200ms var(--alive-ease);
+}
+.hud-panel.folded .hp-caret { transform: rotate(0deg); }
+.hud-panel.folded .hp-head { border-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .hp-caret { transition: none; } }

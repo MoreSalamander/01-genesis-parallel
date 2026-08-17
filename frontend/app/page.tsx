@@ -209,7 +209,13 @@ export default function Board() {
       </div>
 
       {missions.length > 0 && (
-        <Panel title="Everything you have asked" meta="newest first" className="answers">
+        <Panel
+          title="Everything you have asked"
+          className="answers"
+          foldId="asked"
+          meta={`${asked.length} question${asked.length === 1 ? "" : "s"}${
+            asked.length === missions.length ? "" : ` · ${missions.length} runs`} · newest first`}
+        >
           <ul className="answer-list alive-cascade">
             {asked.map(({ latest: m, times }, i) => {
               const state = OUTCOME[m.status] ?? { word: "Working on it", cls: "busy" };
