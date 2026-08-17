@@ -30,6 +30,34 @@ const TICKS = 260;
 const DEPTH = 300;          // how far back the far wall sits
 const FOCAL = 620;          // perspective strength: larger is flatter
 
+/* The shape is a claim, so it says something true.
+
+   Nodes are pulled onto a shell, and which shell is set by how well the studio
+   knows the thing: what it knows from several facts settles into the core, what
+   rests on a single fact sits out on the surface. The form then reads as a body
+   with a dense middle and a thin skin — which is exactly what the numbers say,
+   that most of what is tracked is known from one fact only. Repulsion still
+   spreads them across their shell, so this is a mould and not a lattice. */
+/* An ellipsoid, not a sphere: the canvas is 720x340, so a sphere is capped by the
+   short axis and four hundred entities have nowhere to go — they win against the
+   shell and fill the frame again. These are the semi-axes of the skin, and the
+   maths below works in normalised ellipsoid space so one scalar can say which
+   shell a node belongs on regardless of direction. */
+const RX = 286;
+const RY = 142;
+const RZ = 232;
+/* How deep the core sits, as a fraction of the skin. */
+const CORE_F = 0.46;
+/* The pull has to beat the repulsion of every other node, and at this size that
+   is hundreds of pairs pushing outward — 0.055 lost, and the mould did not hold. */
+const SHELL_PULL = 0.42;
+
+function shellFraction(claims: number): number {
+  // Three facts is where "the studio knows this" begins, so that is the core.
+  const known = Math.min(1, Math.max(0, (claims - 1) / 2));
+  return 1 - (1 - CORE_F) * known;
+}
+
 /* One point, rotated then projected. Yaw turns the model, pitch tips it, and the
    perspective divide is what makes depth legible at all — without it a rotating
    graph is just a graph that wobbles. `k` is the scale at that depth, so a node's
@@ -91,7 +119,7 @@ function settle(nodes: Node[], edges: [number, number][], steps: number) {
         const a = nodes[i], b = nodes[j];
         const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
         const d2 = Math.max(64, dx * dx + dy * dy + dz * dz);
-        const f = 2600 / d2, d = Math.sqrt(d2);
+        const f = 1500 / d2, d = Math.sqrt(d2);
         a.vx -= (dx / d) * f; a.vy -= (dy / d) * f; a.vz -= (dz / d) * f;
         b.vx += (dx / d) * f; b.vy += (dy / d) * f; b.vz += (dz / d) * f;
       }
@@ -105,9 +133,15 @@ function settle(nodes: Node[], edges: [number, number][], steps: number) {
       b.vx -= (dx / d) * pull; b.vy -= (dy / d) * pull; b.vz -= (dz / d) * pull;
     }
     for (const n of nodes) {
-      n.vx += (W / 2 - n.x) * 0.004;
-      n.vy += (H / 2 - n.y) * 0.004;
-      n.vz += (0 - n.z) * 0.004;
+      // Toward its own shell, measured in normalised ellipsoid space so the pull
+      // is the same strength in every direction. A plain centring force collapses
+      // everything into one ball and the shape then says nothing.
+      const ux = (n.x - W / 2) / RX, uy = (n.y - H / 2) / RY, uz = n.z / RZ;
+      const un = Math.max(0.001, Math.hypot(ux, uy, uz));
+      const gap = (shellFraction(n.claims) - un) * SHELL_PULL;
+      n.vx += (ux / un) * gap * RX;
+      n.vy += (uy / un) * gap * RY;
+      n.vz += (uz / un) * gap * RZ;
       n.vx *= 0.86; n.vy *= 0.86; n.vz *= 0.86;
       // Room to rotate: the box is bounded in x and y so nothing leaves frame,
       // and in z so the far wall cannot swallow a node entirely.
@@ -140,6 +174,8 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   // re-run the effect and re-settle 260 ticks of O(n²) repulsion on every
   // mouse move of a drag.
   const yawRef = useRef(0.5);
+  // Tipped slightly down the whole time, so the rotation reads as a body turning
+  // rather than as a flat ring spinning.
   const pitchRef = useRef(-0.22);
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
@@ -259,8 +295,18 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
 
     let raf = 0;
     const start = performance.now();
+    let last = start;
     const drift = (now: number) => {
       const t = (now - start) / 1000;
+      // Turn it slowly, about a revolution every fifty seconds — enough that the
+      // far side comes round on its own, slow enough to read while it moves.
+      // Yields immediately to a drag, and to a hover: nobody should have to
+      // chase the thing they are pointing at.
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (!dragRef.current && hoveredRef.current === null && selectedRef.current === null) {
+        yawRef.current += dt * 0.125;
+      }
       for (const n of nodes) {
         n.x = n.bx! + Math.sin(t * 0.42 + n.phase!) * 4.5;
         n.y = n.by! + Math.cos(t * 0.33 + n.phase!) * 3.5;
@@ -379,10 +425,13 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
             />
           </Reticle>
           <p className="graph-legend">
-            Bigger means more has been asserted, and nearer is drawn larger — <b>drag to turn
-            the graph</b>. Amber means something about them is disputed. A line means one question
-            learned about both. Only the busiest are named — hover to light up any other and
-            everything it connects to, or click to read it.
+            It turns on its own, and <b>you can drag it</b> — pointing at anything stops it so you
+            can read. The shape is the studio&apos;s knowledge: what it knows from several facts
+            settles into the core, what rests on a single fact sits out on the surface, so the thin
+            skin is how much is thinly sourced. Bigger means more has been asserted, nearer is drawn
+            larger, and amber means something is disputed. A line means one question learned about
+            both. Only the busiest are named — hover to light up any other and everything it
+            connects to, or click to read it.
           </p>
         </div>
 
