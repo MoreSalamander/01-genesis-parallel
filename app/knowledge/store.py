@@ -22,6 +22,15 @@ from app.models.evidence import Mission, VerificationStatus
 _COMPANY_MARKERS = ("studio", "studios", "collective", "ventures", "pictures", "films", "media", "inc", "labs")
 
 
+# Values extraction uses to mean "no entity here". They must never become
+# nodes in the world model.
+_NON_ENTITIES = {
+    "", "-", "—", "n/a", "n.a.", "na", "none", "null", "nil",
+    "unknown", "unspecified", "not specified", "not applicable",
+    "various", "multiple", "tbd", "tba",
+}
+
+
 def _entity_type(name: str) -> str:
     lowered = name.lower()
     if any(marker in lowered for marker in _COMPANY_MARKERS):
@@ -54,7 +63,11 @@ class LocalGraphStore:
         now = datetime.now(timezone.utc).isoformat()
 
         for claim in mission.claims:
-            if not claim.entity:
+            # Extraction emits a placeholder when it found no entity at all, and
+            # a placeholder is not a thing the studio knows about. Promoting
+            # them put a company called "N/A" in the world model carrying seven
+            # assertions, drawn as one of the larger nodes in the graph.
+            if not claim.entity or claim.entity.strip().lower() in _NON_ENTITIES:
                 continue
             if claim.status == VerificationStatus.UNVERIFIED:
                 continue  # stays episodic only (§10)

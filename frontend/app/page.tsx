@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   ACTIVE_STATUSES, EventRecord, MissionSummary, SystemStatus,
-  getEvents, getStatus, listMissions, startMission,
+  getEvents, getStatus, groupByQuestion, listMissions, startMission,
 } from "@/lib/api";
 import { HowThisWorks } from "./components/HowThisWorks";
 import { ContextGraph } from "./components/ContextGraph";
@@ -89,6 +89,8 @@ export default function Board() {
   const conflicted = missions.reduce((n, m) => n + m.conflicted, 0);
   const answered = missions.filter((m) => m.has_recommendation).length;
   const running = missions.some((m) => ACTIVE_STATUSES.has(m.status));
+  // Repeats of a question collapse into one entry showing the latest run.
+  const asked = groupByQuestion(missions);
 
   const ask = async (text: string) => {
     const objective = text.trim();
@@ -209,7 +211,7 @@ export default function Board() {
       {missions.length > 0 && (
         <Panel title="Everything you have asked" meta="newest first" className="answers">
           <ul className="answer-list alive-cascade">
-            {missions.map((m, i) => {
+            {asked.map(({ latest: m, times }, i) => {
               const state = OUTCOME[m.status] ?? { word: "Working on it", cls: "busy" };
               return (
                 <li key={m.id} style={cascade(i)}>
@@ -225,6 +227,10 @@ export default function Board() {
                         <span className="conflict">
                           {m.conflicted} disagreement{m.conflicted === 1 ? "" : "s"} kept
                         </span></>
+                      )}
+                      {times > 1 && (
+                        <><span className="sep">·</span>
+                        <span className="muted">asked {times}× — showing the latest</span></>
                       )}
                     </span>
                   </Link>

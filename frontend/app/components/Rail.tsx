@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ACTIVE_STATUSES, MissionSummary, listMissions } from "@/lib/api";
+import { ACTIVE_STATUSES, MissionSummary, groupByQuestion, listMissions } from "@/lib/api";
 import { Rolling } from "@/lib/alive";
 
 export function Rail() {
@@ -30,6 +30,8 @@ export function Rail() {
   // recommendation but is finished — counting it as working left dead missions
   // "in flight" for days.
   const open = missions.filter((m) => ACTIVE_STATUSES.has(m.status)).length;
+  // The same question asked twice is one entry, not two.
+  const asked = groupByQuestion(missions);
 
   const vitals = [
     { label: "answers", value: missions.length },
@@ -63,7 +65,7 @@ export function Rail() {
       <div className="rail-block">
         <div className="rail-head">recent answers</div>
         {missions.length === 0 && <div className="rail-empty">nothing asked yet</div>}
-        {missions.slice(0, 8).map((m) => (
+        {asked.slice(0, 8).map(({ latest: m, times }) => (
           <Link
             href={`/missions/${m.id}`}
             key={m.id}
@@ -73,6 +75,7 @@ export function Rail() {
             <span className="s">
               {m.sources} sources
               {m.conflicted > 0 ? ` · ${m.conflicted} conflict${m.conflicted === 1 ? "" : "s"}` : ""}
+              {times > 1 ? ` · asked ${times}×` : ""}
             </span>
           </Link>
         ))}

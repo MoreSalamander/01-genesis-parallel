@@ -87,3 +87,27 @@ export const decideMission = (id: string, decision: "approved" | "rejected" | "m
   });
 
 export const ACTIVE_STATUSES = new Set(["PLANNED", "RESEARCHING", "VERIFYING", "SYNTHESIZING"]);
+
+/** One question, however many times it was asked. */
+export interface AskedGroup { latest: MissionSummary; times: number; earlier: MissionSummary[] }
+
+/** Asking the same question twice is one question with two runs, not two
+ *  entries. Listing each run separately pushed distinct questions off the rail
+ *  and made a short history look like a busy one. Runs are ordered by when they
+ *  were created rather than by the order the API returned them, so "latest"
+ *  means latest regardless of that. */
+export function groupByQuestion(missions: MissionSummary[]): AskedGroup[] {
+  const by = new Map<string, MissionSummary[]>();
+  for (const m of missions) {
+    const key = m.objective.trim().replace(/\s+/g, " ").toLowerCase();
+    const list = by.get(key);
+    if (list) list.push(m);
+    else by.set(key, [m]);
+  }
+  const groups = [...by.values()].map((runs) => {
+    const sorted = [...runs].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return { latest: sorted[0], times: sorted.length, earlier: sorted.slice(1) };
+  });
+  groups.sort((a, b) => b.latest.created_at.localeCompare(a.latest.created_at));
+  return groups;
+}
