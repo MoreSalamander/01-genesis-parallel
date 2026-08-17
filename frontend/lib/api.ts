@@ -128,6 +128,12 @@ export interface VitalsReport {
 }
 export const getVitals = () => api<VitalsReport>("/api/vitals");
 
+/** The project's own documents, read from the repository at request time. */
+export interface DocEntry { slug: string; title: string; path: string; bytes: number; modified: string }
+export interface DocPage { slug: string; title: string; path: string; markdown: string }
+export const getDocsIndex = () => api<DocEntry[]>("/api/docs-index");
+export const getDoc = (slug: string) => api<DocPage>(`/api/docs-page/${encodeURIComponent(slug)}`);
+
 /** A question the system raised from its own answer. Recorded when it is raised,
  *  so these exist whether or not the question was also dispatched as its own
  *  mission — which is why the tracker reads these and not `raised_by`. */

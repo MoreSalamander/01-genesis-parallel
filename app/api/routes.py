@@ -179,6 +179,69 @@ def agents() -> dict:
     return roster.roster()
 
 
+# The project's own documents, readable in the console. A reviewer should not have
+# to leave the running system to find out how it works, and documentation that
+# lives beside the code it describes goes stale less often than a copy of it.
+#
+# The set is a fixed whitelist, not a directory walk: this endpoint reads files off
+# disk by request, and a walk plus a path parameter is how that becomes an
+# arbitrary-file read. Adding a document means adding a line here.
+_DOCS: dict[str, tuple[str, str]] = {
+    "readme": ("README.md", "Read me first"),
+    "architecture": ("docs/architecture/system-01-parallel.v2.locked.md", "Locked architecture"),
+    "contracts": ("docs/agent-contracts/contracts.md", "Agent contracts"),
+    "demo": ("docs/demo-script.md", "Demo script"),
+    "adr-0001": ("docs/decisions/0001-builder-implementation-choices.md", "ADR 0001 — Step 1 choices"),
+    "adr-0002": ("docs/decisions/0002-nested-questions.md", "ADR 0002 — Nested questions"),
+}
+
+
+def _doc_root():
+    from pathlib import Path
+
+    # app/api/routes.py → the repository root.
+    return Path(__file__).resolve().parents[2]
+
+
+@router.get("/docs-index")
+def docs_index() -> list[dict]:
+    """What documents exist, with their size and when each was last written."""
+    from datetime import datetime, timezone
+
+    root = _doc_root()
+    out = []
+    for slug, (relative, title) in _DOCS.items():
+        path = root / relative
+        if not path.exists():
+            continue
+        stat = path.stat()
+        out.append({
+            "slug": slug,
+            "title": title,
+            "path": relative,
+            "bytes": stat.st_size,
+            "modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        })
+    return out
+
+
+@router.get("/docs-page/{slug}")
+def docs_page(slug: str) -> dict:
+    """One document, as its own markdown. The console renders it."""
+    entry = _DOCS.get(slug)
+    if entry is None:
+        raise HTTPException(404, "no such document")
+    path = _doc_root() / entry[0]
+    if not path.exists():
+        raise HTTPException(404, f"{entry[0]} is missing from this checkout")
+    return {
+        "slug": slug,
+        "title": entry[1],
+        "path": entry[0],
+        "markdown": path.read_text(encoding="utf-8"),
+    }
+
+
 @router.get("/vitals")
 def vitals() -> dict:
     """How the research is holding up, in the shapes it actually has.

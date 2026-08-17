@@ -36,7 +36,13 @@ export default function PaperPage() {
   }, [id]);
 
   /* Sources are numbered once, in the order they are first cited, and every
-     citation anywhere in the paper resolves to that number. */
+     citation anywhere in the paper resolves to that number.
+
+     Numbered by URL rather than by source id, which is not a detail: the same
+     page retrieved by two lines of enquiry produces two Source records, so
+     numbering by id gave one page two entries in the bibliography and two
+     different citation numbers for the same evidence. A reference list that
+     lists a page twice is wrong before it is inconvenient. */
   const paper = useMemo(() => {
     if (!mission) return null;
     const evidenceById = new Map(mission.evidence.map((e) => [e.id, e]));
@@ -50,10 +56,10 @@ export default function PaperPage() {
         const evidence = evidenceById.get(evidenceId);
         const source = evidence && sourceById.get(evidence.source_id);
         if (!source) continue;
-        let n = numberOf.get(source.id);
+        let n = numberOf.get(source.url);
         if (n === undefined) {
           n = ordered.length + 1;
-          numberOf.set(source.id, n);
+          numberOf.set(source.url, n);
           ordered.push({ n, title: source.title || source.url, url: source.url });
         }
         if (!seen.includes(n)) seen.push(n);
@@ -69,7 +75,7 @@ export default function PaperPage() {
         .map((e) => ({
           text: e.supporting_content,
           source: sourceById.get(e.source_id)?.title ?? "",
-          n: numberOf.get(e.source_id) ?? 0,
+          n: numberOf.get(sourceById.get(e.source_id)?.url ?? "") ?? 0,
         }));
 
     // Order matters: confirmed first, because citation numbers are assigned as
@@ -82,10 +88,15 @@ export default function PaperPage() {
     }));
     const byId = new Map(withCites.map((r) => [r.claim.id, r]));
 
-    // Any page read but never cited still belongs in the record.
-    const uncited = mission.sources
-      .filter((s) => !numberOf.has(s.id))
-      .map((s) => ({ title: s.title || s.url, url: s.url }));
+    // Any page read but never cited still belongs in the record — once each,
+    // however many times it was retrieved.
+    const uncited: { title: string; url: string }[] = [];
+    const listed = new Set<string>();
+    for (const source of mission.sources) {
+      if (numberOf.has(source.url) || listed.has(source.url)) continue;
+      listed.add(source.url);
+      uncited.push({ title: source.title || source.url, url: source.url });
+    }
 
     return {
       confirmed: confirmed.map((c) => byId.get(c.id)!),

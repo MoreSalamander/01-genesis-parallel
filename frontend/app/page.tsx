@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -150,6 +151,12 @@ export default function Board() {
         </div>
         {error && <p className="muted">{error}</p>}
       </Panel>
+
+      <nav className="board-nav">
+        {/* The documents live inside the running system, so nobody has to leave it
+            to find out how it works. */}
+        <Link href="/docs">how this works · the project documents →</Link>
+      </nav>
 
       {/* The world model gets the full width. In the wall's middle column it was
           rendering a 720-wide canvas into about 184 CSS pixels — the detail list
