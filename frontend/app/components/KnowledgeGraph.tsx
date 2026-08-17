@@ -71,6 +71,7 @@ function project(n: Node, yaw: number, pitch: number) {
 
 function build(entities: Record<string, KnowledgeEntity>) {
   const names = Object.keys(entities);
+  const remembered = loadLayout();
   const nodes: Node[] = names.map((name, i) => {
     const assertions = entities[name].assertions ?? [];
     const disputed = assertions.some((a) => a.disputed);
@@ -84,11 +85,13 @@ function build(entities: Record<string, KnowledgeEntity>) {
       ? SUN_R * (0.3 + jitter(12.9898) * 0.7)
       : DEFAULT_FORCES.wire * (0.85 + jitter(78.233) * 0.3);
     const lift = disputed ? (jitter(43.758) - 0.5) * SUN_R : (jitter(93.989) - 0.5) * 24;
+    // A remembered place wins over a seeded one, so the map stays the map.
+    const was = remembered[name];
     return {
       id: name,
-      x: W / 2 + Math.cos(theta) * radius,
-      y: H / 2 + lift,
-      z: Math.sin(theta) * radius,
+      x: was ? was[0] : W / 2 + Math.cos(theta) * radius,
+      y: was ? was[1] : H / 2 + lift,
+      z: was ? was[2] : Math.sin(theta) * radius,
       vx: 0, vy: 0, vz: 0,
       claims: assertions.length,
       r: Math.min(24, 9 + assertions.length * 2),
@@ -113,7 +116,7 @@ function build(entities: Record<string, KnowledgeEntity>) {
 
 /* One tick of the model, run every frame rather than once up front, so moving a
    slider re-shapes what you are looking at instead of restarting it. */
-function step(nodes: Node[], f: Forces) {
+function step(nodes: Node[], f: Forces): number {
   const cutoff = f.spacing * f.spacing;
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
@@ -130,6 +133,7 @@ function step(nodes: Node[], f: Forces) {
     }
   }
 
+  let moved = 0;
   for (const n of nodes) {
     const ox = n.x - W / 2, oy = n.y - H / 2, oz = n.z;
     if (n.disputed) {
@@ -152,7 +156,34 @@ function step(nodes: Node[], f: Forces) {
     n.x = Math.max(n.r + 20, Math.min(W - n.r - 20, n.x));
     n.y = Math.max(n.r + 10, Math.min(H - n.r - 10, n.y));
     n.z = Math.max(-DEPTH, Math.min(DEPTH, n.z));
+    moved += Math.abs(n.vx) + Math.abs(n.vy) + Math.abs(n.vz);
   }
+  return moved / Math.max(1, nodes.length);
+}
+
+/* Where the model was left. A graph you have learned the shape of should be the
+   same graph next time: without this every reload re-derived positions from the
+   entity order, so one new company shifted everything and the map you had built
+   in your head was gone. Positions are stored per entity name, so a node keeps
+   its place across reloads and across new arrivals. */
+/* Average per-node movement below which the model is considered arrived. */
+const REST = 0.05;
+const LAYOUT_KEY = "genesis.graph.layout";
+const FORCES_KEY = "genesis.graph.forces";
+
+function saveLayout(nodes: Node[]) {
+  try {
+    const out: Record<string, [number, number, number]> = {};
+    for (const n of nodes) out[n.id] = [Math.round(n.x), Math.round(n.y), Math.round(n.z)];
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(out));
+  } catch { /* private mode, or over quota — the model just re-derives next time */ }
+}
+
+function loadLayout(): Record<string, [number, number, number]> {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
 }
 
 const STATE_WORD: Record<string, string> = {
@@ -174,6 +205,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   const selectedRef = useRef<string | null>(null);
   const drawRef = useRef<(() => void) | null>(null);
   const stepRef = useRef<((ticks: number) => void) | null>(null);
+  const settledRef = useRef(false);
   // Rotation lives in refs for the same reason hover does: as state it would
   // re-run the effect and re-settle 260 ticks of O(n²) repulsion on every
   // mouse move of a drag.
@@ -187,9 +219,23 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   // pixel of a drag.
   const forcesRef = useRef<Forces>({ ...DEFAULT_FORCES });
   const [forces, setForces] = useState<Forces>({ ...DEFAULT_FORCES });
+  // Tuning is part of the arrangement, so it is remembered with it. Read after
+  // mount, like every other stored preference here, so the server and client
+  // agree about the first paint.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FORCES_KEY);
+      if (!raw) return;
+      const saved = { ...DEFAULT_FORCES, ...JSON.parse(raw) } as Forces;
+      forcesRef.current = saved;
+      setForces(saved);
+      stepRef.current?.(60);
+    } catch { /* the defaults stand */ }
+  }, []);
   const setForce = (key: keyof Forces, value: number) => {
     forcesRef.current = { ...forcesRef.current, [key]: value };
     setForces(forcesRef.current);
+    try { localStorage.setItem(FORCES_KEY, JSON.stringify(forcesRef.current)); } catch { /* ignore */ }
     // Settle and repaint on the spot rather than waiting for the animation loop.
     // The loop is not always there: reduced motion has none at all, and a
     // background tab has requestAnimationFrame suspended — in both cases the
@@ -353,18 +399,27 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       ctx.globalAlpha = 1;
     };
 
-    // Settle the layout once, then keep it gently in motion. Re-running the
-    // O(n²) repulsion every frame would be 11k pair calculations at this size;
-    // drifting each node around its settled position costs nothing and means
-    // the graph is never frozen. The drift is ambient — it claims nothing.
-    // A few ticks up front so the first paint is a shape rather than the seed
-    // ring, then the loop keeps stepping it — and the controls can step it
-    // directly when there is no loop.
+    /* The model settles and then holds. Stepping forever meant the graph was
+       never the same twice — a permanent shimmer of nodes finding their places,
+       which makes it impossible to learn the map and impossible to point at
+       anything. So it steps until movement falls below a threshold, then stops
+       and stays put; a control or new data wakes it, and it settles again.
+
+       Rotation is unaffected: turning a still model is the motion that was
+       wanted, and a model that never stops moving underneath it is not. */
     const advance = (ticks: number) => {
-      for (let i = 0; i < ticks; i++) step(nodes, forcesRef.current);
+      let moved = 0;
+      for (let i = 0; i < ticks; i++) moved = step(nodes, forcesRef.current);
+      settledRef.current = moved < REST;
       drawRef.current?.();
+      // Saved whether or not it has come to rest. Persisting only at rest tied
+      // the map's memory to a convergence that may not happen — with reduced
+      // motion or a background tab there is no loop to converge in, and the
+      // arrangement would be forgotten precisely for the users who cannot watch
+      // it settle. Where it got to is worth keeping either way.
+      saveLayout(nodes);
     };
-    stepRef.current = advance;
+    stepRef.current = (ticks: number) => { settledRef.current = false; advance(ticks); };
     advance(90);
     drawRef.current = draw;
     draw();
@@ -386,9 +441,15 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       if (!dragRef.current && hoveredRef.current === null && selectedRef.current === null) {
         yawRef.current += dt * 0.125;
       }
-      // One tick a frame: the model is never frozen, and a slider takes effect
-      // on the thing you are already looking at.
-      step(nodes, forcesRef.current);
+      // Step only while it is still arriving. Once it has, the frame is spent on
+      // rotation alone and the arrangement is fixed until something changes it.
+      if (!settledRef.current) {
+        const moved = step(nodes, forcesRef.current);
+        if (moved < REST) {
+          settledRef.current = true;
+          saveLayout(nodes);       // remember where it came to rest
+        }
+      }
       draw();
       raf = requestAnimationFrame(drift);
     };
@@ -529,6 +590,11 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
             <button className="gf-reset" onClick={() => {
               forcesRef.current = { ...DEFAULT_FORCES };
               setForces(forcesRef.current);
+              try {
+                localStorage.removeItem(FORCES_KEY);
+                localStorage.removeItem(LAYOUT_KEY);
+              } catch { /* ignore */ }
+              stepRef.current?.(120);
             }}>reset</button>
           </div>
 
