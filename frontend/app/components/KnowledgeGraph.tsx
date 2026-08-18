@@ -661,6 +661,24 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         ctx.globalAlpha = 1;
         ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
         ctx.stroke();
+
+        /* A small inner ring in the connection's colour, inside the dark ones.
+           It gives a settled node something at its centre — a black disc with one
+           outline is a hole, and six hundred holes is a mesh — and it ties the
+           nodes to the wires running between them without filling them in.
+
+           Only where the interior is actually dark: a node in the current
+           connection is already filled with this colour, so the ring would be
+           invisible, and a contested node has its lit fill instead. */
+        if (!n.disputed && !inConnection) {
+          ctx.beginPath();
+          ctx.arc(n.sx!, n.sy!, Math.max(1.4, n.sr! * 0.44), 0, Math.PI * 2);
+          ctx.strokeStyle = edgeInk;
+          ctx.lineWidth = Math.max(1, n.sr! * 0.09);
+          ctx.globalAlpha = 0.95;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
         if (on) {                                   // selection ring
           ctx.beginPath();
           ctx.arc(n.sx!, n.sy!, n.sr! + 6, 0, Math.PI * 2);
