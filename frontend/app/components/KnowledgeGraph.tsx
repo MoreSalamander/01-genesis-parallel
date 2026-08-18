@@ -841,6 +841,13 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
        passive — preventDefault there is ignored and the page scrolls away under
        the cursor while the graph zooms. */
     const onWheel = (event: WheelEvent) => {
+      /* Only with a modifier held. Plain scroll belongs to the page: the graph is
+         a tall panel most of the way down a long board, so a wheel that zoomed
+         unconditionally trapped the scroll every time the cursor crossed it —
+         you set out to read the rest of the page and ended up resizing a graph.
+         Ctrl or Command is the convention for zooming a canvas, and a trackpad
+         pinch arrives as exactly that, so pinch works without special handling. */
+      if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       setZoomTo(zoomRef.current * (event.deltaY < 0 ? 1.12 : 1 / 1.12));
     };
@@ -1014,7 +1021,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                       title="Zoom out">−</button>
               <span className="gz-at">{Math.round(zoom * 100)}%</span>
               <button onClick={() => setZoomTo(zoomRef.current * 1.25)}
-                      title="Zoom in — or scroll on the graph">+</button>
+                      title="Zoom in — or hold ⌘/Ctrl and scroll on the graph">+</button>
             </div>
             <div className="gf-shape" role="group" aria-label="Arrangement">
               {(["sphere", "plane", "free"] as const).map((option) => (
