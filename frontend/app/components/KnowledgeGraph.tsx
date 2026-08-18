@@ -312,6 +312,23 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   /* Zoom is a view setting, like the camera angle: held in a ref so changing it
      never re-runs the layout effect, and not persisted, because coming back to a
      graph you left zoomed into a corner is disorienting rather than helpful. */
+  /* Spin is a lasting preference rather than a view state, so unlike zoom it is
+     remembered: someone who finds a turning graph distracting should not have to
+     stop it every time they open the console. Held in a ref as well, because the
+     animation loop reads it every frame and must not be rebuilt to see a change. */
+  const spinRef = useRef(true);
+  const [spinning, setSpinning] = useState(true);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("genesis.graph.spin");
+      if (stored !== null) { spinRef.current = stored === "1"; setSpinning(stored === "1"); }
+    } catch { /* private mode — it spins */ }
+  }, []);
+  const toggleSpin = () => {
+    spinRef.current = !spinRef.current;
+    setSpinning(spinRef.current);
+    try { localStorage.setItem("genesis.graph.spin", spinRef.current ? "1" : "0"); } catch { /* ignore */ }
+  };
   const zoomRef = useRef(1);
   const [zoom, setZoom] = useState(1);
   const setZoomTo = (next: number) => {
@@ -713,7 +730,8 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       // chase the thing they are pointing at.
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (!dragRef.current && hoveredRef.current === null && selectedRef.current === null) {
+      if (spinRef.current
+          && !dragRef.current && hoveredRef.current === null && selectedRef.current === null) {
         yawRef.current += dt * 0.125;
       }
       // Step only while it is still arriving. Once it has, the frame is spent on
@@ -908,6 +926,14 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
               <input type="range" min={0.4} max={4} step={0.2} value={forces.edgeWidth}
                      onChange={(e) => setForce("edgeWidth", Number(e.target.value))} />
             </label>
+            <button className={`gf-tour${spinning ? " on" : ""}`}
+                    onClick={toggleSpin}
+                    aria-pressed={spinning}
+                    title={spinning
+                      ? "Stop the graph turning on its own — dragging still works"
+                      : "Let the graph turn on its own again"}>
+              {spinning ? "◼ spin" : "▶ spin"}
+            </button>
             <div className="gf-zoom" role="group" aria-label="Zoom">
               <button onClick={() => setZoomTo(zoomRef.current / 1.25)}
                       title="Zoom out">−</button>
