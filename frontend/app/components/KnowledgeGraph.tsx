@@ -20,6 +20,7 @@ interface Node {
   id: string; x: number; y: number; z: number;
   vx: number; vy: number; vz: number;
   r: number; disputed: boolean; claims: number;
+  slot: number;        // its place on the contested lattice, -1 for everything else
   bx?: number; by?: number; bz?: number; phase?: number;   // settled position + drift
   sx?: number; sy?: number; sr?: number; depth?: number;   // last projection
 }
@@ -47,7 +48,18 @@ const FOCAL = 900;          // perspective strength: larger is flatter
    much is on screen: four hundred entities want different numbers from forty.
    The controls write into a ref the simulation reads each tick, so moving one
    re-shapes the running model rather than restarting it. */
-const SUN_R = 74;              // how far the contested mass spreads from the anchor
+const SUN_R = 74;              // the smallest the contested shell is ever drawn
+
+/* How big the contested shell has to be for its nodes to sit evenly on it.
+
+   A sphere of radius r has 4πr² of surface, so n nodes wanting d between them need
+   r = d·√(n/4π). Held at a fixed 74 the mass was over-subscribed — seventy nodes
+   with room for a dozen — and they resolved it the only way they could, by pushing
+   each other off the shell into a clump. Given the room, the same repulsion spreads
+   them evenly, exactly as it does on the outer shell. */
+function sunRadius(count: number, spacing: number): number {
+  return Math.max(SUN_R, spacing * 0.55 * Math.sqrt(count / (4 * Math.PI)));
+}
 /* How hard the plane holds its disc. This was 0.09 and produced a slab 40% of the
    canvas tall — switching to "plane" changed the arrangement and did not look like
    a plane, which is worse than not switching. Six hundred nodes crowded onto a
@@ -99,7 +111,7 @@ export interface Forces {
      a shell in every direction, or a plane through it. Both say the same thing
      about the core and a different thing about the rest — a shell reads as a body
      with an inside, a plane reads as a system you are looking across. */
-  shape: "sphere" | "plane";
+  shape: "sphere" | "plane" | "free";
 }
 export const DEFAULT_FORCES: Forces = {
   wire: 250, pull: 0.05, push: 1500, spacing: 90,
@@ -154,6 +166,7 @@ function build(entities: Record<string, KnowledgeEntity>) {
       claims: assertions.length,
       r: Math.min(24, 9 + assertions.length * 2),
       disputed,
+      slot: -1,
     };
   });
 
@@ -175,6 +188,15 @@ function build(entities: Record<string, KnowledgeEntity>) {
       if (shared > 0) edges.push({ a: i, b: j, shared });
     }
   }
+  /* Each contested node gets a numbered place on the core's lattice. Spreading
+     them by repulsion alone did not work and could not: seventy nodes with room
+     for a dozen resolve their crowding by leaving the shell, and a restored layout
+     that is already clumped needs hundreds of ticks to unpick — six hundred of
+     them blocked the renderer for half a minute when I tried it. An assigned place
+     is even on the first frame and costs nothing. */
+  let slot = 0;
+  for (const n of nodes) if (n.disputed) n.slot = slot++;
+
   const degree = new Array(names.length).fill(0);
   for (const e of edges) { degree[e.a]++; degree[e.b]++; }
   const tour = [...edges.keys()].sort((x, y) => {
@@ -189,6 +211,9 @@ function build(entities: Record<string, KnowledgeEntity>) {
    slider re-shapes what you are looking at instead of restarting it. */
 function step(nodes: Node[], f: Forces): number {
   const cutoff = f.spacing * f.spacing;
+  let contested = 0;
+  for (const n of nodes) if (n.disputed) contested++;
+  const sunR = sunRadius(contested, f.spacing);
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
       const a = nodes[i], b = nodes[j];
@@ -208,11 +233,36 @@ function step(nodes: Node[], f: Forces): number {
   for (const n of nodes) {
     const ox = n.x - W / 2, oy = n.y - H / 2, oz = n.z;
     if (n.disputed) {
-      // The sun: held near the anchor in every direction, so the push between
-      // them is what gives the mass its volume.
+      /* The core: pulled to its own place on a Fibonacci lattice — the even
+         covering of a sphere — rather than to a radius it has to negotiate with
+         everything else. Evenness is assigned here and emergent on the outer
+         shell, and the difference is room: the shell has surface to spare and the
+         core does not, so out there the push spreads nodes and in here it only
+         ever piled them up. */
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      const t = contested > 1 ? n.slot / (contested - 1) : 0.5;
+      const yUnit = 1 - t * 2;
+      const ring = Math.sqrt(Math.max(0, 1 - yUnit * yUnit));
+      const theta = golden * n.slot;
+      const tx = W / 2 + Math.cos(theta) * ring * sunR;
+      const ty = H / 2 + yUnit * sunR;
+      const tz = Math.sin(theta) * ring * sunR;
+      const hold = f.pull * 2.2;
+      n.vx += (tx - n.x) * hold;
+      n.vy += (ty - n.y) * hold;
+      n.vz += (tz - n.z) * hold;
+    } else if (f.shape === "free") {
+      /* No shape at all: the settled nodes are held only by the push between them
+         and a weak pull toward the middle, so they fill the room and find their own
+         arrangement. This is the honest default in one sense — nothing about the
+         data says the world model is a sphere — and it is the one arrangement where
+         crowding is the whole picture: where nodes bunch, the studio knows a lot
+         about a little. The bounds below keep them in frame. */
       const dist = Math.max(1, Math.hypot(ox, oy, oz));
-      const gap = (SUN_R - dist) * f.pull * 1.6;
-      n.vx += (ox / dist) * gap; n.vy += (oy / dist) * gap; n.vz += (oz / dist) * gap;
+      const pullIn = dist > f.wire * 1.25 ? (f.wire * 1.25 - dist) * f.pull * 0.6 : 0;
+      n.vx += (ox / dist) * pullIn;
+      n.vy += (oy / dist) * pullIn;
+      n.vz += (oz / dist) * pullIn;
     } else if (f.shape === "plane") {
       // A plane: held at wire length within it, and flattened onto it. The core
       // still sits at the centre, so this is the same statement seen edge-on.
@@ -368,7 +418,8 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
         colour: typeof raw_saved.colour === "string" ? raw_saved.colour : DEFAULT_FORCES.colour,
         edgeColour:
           typeof raw_saved.edgeColour === "string" ? raw_saved.edgeColour : DEFAULT_FORCES.edgeColour,
-        shape: raw_saved.shape === "plane" ? "plane" : "sphere",
+        shape: raw_saved.shape === "plane" || raw_saved.shape === "free"
+          ? raw_saved.shape : "sphere",
       };
       forcesRef.current = saved;
       setForces(saved);
@@ -942,7 +993,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                       title="Zoom in — or scroll on the graph">+</button>
             </div>
             <div className="gf-shape" role="group" aria-label="Arrangement">
-              {(["sphere", "plane"] as const).map((option) => (
+              {(["sphere", "plane", "free"] as const).map((option) => (
                 <button
                   key={option}
                   className={forces.shape === option ? "on" : ""}
@@ -950,7 +1001,9 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
                   onClick={() => setForce("shape", option)}
                   title={option === "sphere"
                     ? "Settled material on a shell around the contested core"
-                    : "Settled material on a plane through the contested core"}
+                    : option === "plane"
+                      ? "Settled material on a plane through the contested core"
+                      : "No imposed shape — nodes push each other apart and fill the room"}
                 >{option}</button>
               ))}
             </div>
