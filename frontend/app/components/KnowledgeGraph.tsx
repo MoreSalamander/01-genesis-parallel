@@ -67,8 +67,11 @@ const PLANE_DAMP = 0.22;
 
    Interpolated in sRGB, which is not perceptually even, but the two ends are the
    same hue at different lightness so there is no hue shift to go wrong. */
-const AMBER_CORE: [number, number, number] = [255, 232, 168];
-const AMBER_RIM: [number, number, number] = [166, 110, 8];
+/* The interior of a settled node: near-black rather than pure black, so it sits
+   in the console's palette instead of punching a hole through it. */
+const NODE_CORE = "#05070b";
+const AMBER_CORE: [number, number, number] = [255, 248, 214];
+const AMBER_RIM: [number, number, number] = [236, 168, 22];
 
 function amberAt(distance: number, span: number): string {
   /* Normalised against the mass's own reach rather than against SUN_R. The
@@ -558,10 +561,17 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
            colour only while it is part of the fan the sequence is holding. */
         // Amber fills from the gradient by where it sits in the mass; everything
         // else fills flat, in its own colour or the connection's.
+        /* The settled nodes read as objects rather than as tinted glass: a dark
+           interior with a coloured ring. It also stops them acting as lenses —
+           a translucent fill took the colour of whichever wire ran behind it, so
+           the same node looked different depending on what it happened to overlap.
+
+           A node in the current connection still fills with the connection's
+           colour, which is the one thing that should override its own look. */
         ctx.fillStyle = n.disputed
           ? amberAt(Math.hypot(n.x - W / 2, n.y - H / 2, n.z), sunSpan)
-          : inConnection ? edgeInk : colour;
-        ctx.globalAlpha = n.disputed || inConnection ? 1 : (on ? 0.5 : 0.26) * depth;
+          : inConnection ? edgeInk : NODE_CORE;
+        ctx.globalAlpha = 1;
         ctx.fill();
         // The ring carries the node's own colour — amber still means disputed
         // while the fill is showing the connection — at the node's own transparency.
