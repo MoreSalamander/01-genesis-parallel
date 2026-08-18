@@ -633,21 +633,46 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
 
        Most-connected first, because that is the order in which the graph is worth
        explaining. */
-    const connected = nodes
-      .map((n, i) => i)
-      .filter((i) => degree[i] > 0)
-      .sort((x, y) => degree[y] - degree[x]);
+    const connected = nodes.map((n, i) => i).filter((i) => degree[i] > 0);
+
+    /* A random order, and no two in a row with the same number of connections.
+
+       Ranked most-connected-first, the cycle opened with a handful of hubs and
+       then spent the rest of its twenty minutes on identical-looking entities —
+       thirty in a row reading "1 connection", which is the same frame thirty
+       times. Random spreads the interesting ones through the run, and the
+       adjacent-degree pass stops the shuffle from happening to produce the same
+       run by chance: consecutive entries always differ in how connected they are,
+       so each step is visibly a different kind of thing.
+
+       Reshuffled on every restart, so the same order never comes round twice. */
+    const shuffled = () => {
+      const order = [...connected];
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      for (let i = 1; i < order.length; i++) {
+        if (degree[order[i]] !== degree[order[i - 1]]) continue;
+        // Pull forward the next entry with a different count. If there is none —
+        // every remaining node has this same count — leave it: a run of equals is
+        // then the truth about what is left rather than a failure to shuffle.
+        const swap = order.findIndex((n, k) => k > i && degree[n] !== degree[order[i - 1]]);
+        if (swap > i) [order[i], order[swap]] = [order[swap], order[i]];
+      }
+      return order;
+    };
 
     tourStepRef.current = (restart: boolean) => {
       const t = tourRef.current;
       if (!t) return;
       if (restart) {
-        t.order = connected;
+        t.order = shuffled();
         // Start from the selected node if there is one, so clicking something and
         // starting the tour begins where you were looking rather than jumping.
         const from = selectedRef.current === null
           ? -1
-          : connected.findIndex((i) => nodes[i].id === selectedRef.current);
+          : t.order.findIndex((i) => nodes[i].id === selectedRef.current);
         t.at = from;
       }
       if (t.order.length === 0) { tourNodeRef.current = null; setTourAt(null); drawRef.current?.(); return; }
