@@ -305,8 +305,10 @@ function step(nodes: Node[], f: Forces): number {
    its place across reloads and across new arrivals. */
 /* Average per-node movement below which the model is considered arrived. */
 const REST = 0.05;
-/* Two seconds a connection, as asked: long enough to read both names. */
-const TOUR_MS = 2000;
+/* How long each entity holds the frame. Studio Head's number: fast enough that a
+   run through the graph reads as motion rather than as a slideshow, and still long
+   enough to take in a fan and its name. */
+const TOUR_MS = 850;
 const LAYOUT_KEY = "genesis.graph.layout";
 const FORCES_KEY = "genesis.graph.forces";
 
@@ -345,7 +347,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
   const drawRef = useRef<(() => void) | null>(null);
   const stepRef = useRef<((ticks: number) => void) | null>(null);
   const settledRef = useRef(false);
-  /* The tour. One connection held for two seconds, then the next — a way to read
+  /* The tour. One connection held for a beat, then the next — a way to read
      eight thousand relationships one at a time instead of as a mat of line. It
      runs on its own timer rather than the animation loop, so it works with
      reduced motion and in a background tab, and it drives the same highlight
@@ -710,7 +712,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
        every connection it has lit at once — its whole fan — and then the next node
        takes it. Walking edge by edge said one relationship at a time and never
        showed a shape; a fan says "this is what this company sits inside", which is
-       the thing worth two seconds.
+       the thing worth holding the frame for.
 
        Most-connected first, because that is the order in which the graph is worth
        explaining. */
@@ -1013,7 +1015,7 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
             <button className={`gf-tour${touring ? " on" : ""}`}
                     onClick={() => setTouring((t) => !t)}
                     aria-pressed={touring}
-                    title="Hold each connected entity for two seconds with all of its connections lit, most connected first">
+                    title="Hold each connected entity briefly with all of its connections lit, in random order">
               {touring ? "◼ stop cycling" : "▶ cycle connections"}
             </button>
             <button className="gf-reset" onClick={() => {
