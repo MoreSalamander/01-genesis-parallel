@@ -252,17 +252,20 @@ function step(nodes: Node[], f: Forces): number {
       n.vy += (ty - n.y) * hold;
       n.vz += (tz - n.z) * hold;
     } else if (f.shape === "free") {
-      /* No shape at all: the settled nodes are held only by the push between them
-         and a weak pull toward the middle, so they fill the room and find their own
-         arrangement. This is the honest default in one sense — nothing about the
-         data says the world model is a sphere — and it is the one arrangement where
-         crowding is the whole picture: where nodes bunch, the studio knows a lot
-         about a little. The bounds below keep them in frame. */
-      const dist = Math.max(1, Math.hypot(ox, oy, oz));
-      const pullIn = dist > f.wire * 1.25 ? (f.wire * 1.25 - dist) * f.pull * 0.6 : 0;
-      n.vx += (ox / dist) * pullIn;
-      n.vy += (oy / dist) * pullIn;
-      n.vz += (oz / dist) * pullIn;
+      /* No shape, but not no forces. Push alone is not an arrangement: with
+         nothing pulling in, every node expands until it meets the frame and the
+         result is another shell — 46% of the drawing sat in the outermost band,
+         which is why this looked like the sphere with a wider radius.
+
+         A weak centre-seeking pull that grows with distance is what makes a cloud:
+         it balances the push at whatever radius the crowd needs, so nodes fill the
+         volume instead of lining its wall, and density falls off from the middle
+         rather than piling at the edge. Where they bunch is then a fact about the
+         graph — a well-connected neighbourhood pulling together — rather than a
+         fact about the frame. */
+      n.vx -= ox * f.pull * 0.16;
+      n.vy -= oy * f.pull * 0.16;
+      n.vz -= oz * f.pull * 0.16;
     } else if (f.shape === "plane") {
       // A plane: held at wire length within it, and flattened onto it. The core
       // still sits at the centre, so this is the same statement seen edge-on.
