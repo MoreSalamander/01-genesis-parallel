@@ -79,9 +79,9 @@ const PLANE_DAMP = 0.22;
 
    Interpolated in sRGB, which is not perceptually even, but the two ends are the
    same hue at different lightness so there is no hue shift to go wrong. */
-/* The interior of a settled node: near-black rather than pure black, so it sits
-   in the console's palette instead of punching a hole through it. */
-const NODE_CORE = "#05070b";
+/* The outline a contested node is ringed in: near-black rather than pure black,
+   so it sits in the console's palette instead of punching a hole through it. */
+const NODE_EDGE_DARK = "#05070b";
 const AMBER_CORE: [number, number, number] = [255, 248, 214];
 const AMBER_RIM: [number, number, number] = [236, 168, 22];
 
@@ -487,6 +487,27 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       return next;
     });
   };
+  // And the third: the settings bar. Eight sliders, two colours, a zoom, three
+  // arrangements and a reset is a workshop, and it sits under the graph whether
+  // or not anything is being tuned — so it folds away to a single line and the
+  // graph keeps the room. Folded is the default: the forces are already set to
+  // values that work, and someone meeting the world model for the first time is
+  // there to read it, not to adjust it. Remembered like the other two, so anyone
+  // who is tuning opens it once and finds it open thereafter.
+  const [forcesOpen, setForcesOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("genesis.graph.forces-open");
+      if (stored !== null) setForcesOpen(stored === "1");
+    } catch { /* private mode — folded is the default */ }
+  }, []);
+  const toggleForces = () => {
+    setForcesOpen((open) => {
+      const next = !open;
+      try { localStorage.setItem("genesis.graph.forces-open", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -602,84 +623,52 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
       for (const n of order) {
         const on = n.id === sel || n.id === focus;
         const related = focus !== null && (n.id === focus || near.has(n.id));
-        // Most entities are known from a single fact. They stay on the board —
-        // hiding them would misrepresent how much is thinly sourced — but they
-        // sit back so the ones the studio actually knows well read first.
-        /* One alpha for the whole node, ring included.
-
-           The ring used to be forced to full opacity while the fill sat at 26%,
-           which is why the nodes still read as solid discs however transparent
-           the fill was: six hundred opaque outlines are six hundred solid shapes.
-           A node is see-through or it is not, and its outline is part of it.
-
-           The depth and thin-node factors were also computed here and then thrown
-           away by the next assignment, so neither ever reached a node: everything
-           drew at the same weight whether it was near or far, known from one fact
-           or fifteen. They apply now. */
-        const thin = n.claims <= 1 ? 0.5 : 1;
-        const depth = (focus === null ? thin : related ? 1 : 0.22) * fade(n);
         const colour = n.disputed ? warn : accent;
         const inConnection = focus !== null && related;
+        /* At rest a node is its own colour, solid. A dark interior read as a hole
+           punched in the panel rather than as something the studio knows, and six
+           hundred holes read as a mesh — so the default fill is the node's colour,
+           opaque, and the only thing alpha is asked to carry is the tour.
+
+           While a connection is held, everything outside it drops back. With a
+           solid field that separation is what makes a fan legible: it used to be
+           carried by the fill going dark → coloured, which cannot work once the
+           fill is already coloured.
+
+           Amber never dims. A disputed entity is the one thing here a Studio Head
+           cannot act on without deciding something, so it is never faint, never
+           depth-faded, and it keeps its own colour even inside a connection —
+           what is contested must not become ambiguous because it happens to be
+           part of what is being shown. */
+        const alpha = focus === null || related || n.disputed ? 1 : 0.22;
 
         ctx.beginPath();
         ctx.arc(n.sx!, n.sy!, n.sr!, 0, Math.PI * 2);
-        /* Amber is always solid amber. A disputed entity is the one thing here a
-           Studio Head cannot act on without deciding something, so it is never
-           faint, never depth-faded, and it keeps its own colour even inside a
-           connection — which takes precedence over the connection colouring,
-           deliberately: what is contested must not become ambiguous because it
-           happens to be part of what is being shown.
-
-           Everything else is transparent, and fills solid in the connection's
-           colour only while it is part of the fan the sequence is holding. */
-        // Amber fills from the gradient by where it sits in the mass; everything
-        // else fills flat, in its own colour or the connection's.
-        /* The settled nodes read as objects rather than as tinted glass: a dark
-           interior with a coloured ring. It also stops them acting as lenses —
-           a translucent fill took the colour of whichever wire ran behind it, so
-           the same node looked different depending on what it happened to overlap.
-
-           A node in the current connection still fills with the connection's
-           colour, which is the one thing that should override its own look. */
+        /* Amber fills from the gradient by where it sits in the mass, so the
+           contested core keeps a readable inside. Everything else fills flat in
+           its own colour — or the connection's, which is the one thing that
+           should override a node's own look while the sequence holds it. */
         ctx.fillStyle = n.disputed
           ? amberAt(Math.hypot(n.x - W / 2, n.y - H / 2, n.z), sunSpan)
-          : inConnection ? edgeInk : NODE_CORE;
-        ctx.globalAlpha = 1;
+          : inConnection ? edgeInk : colour;
+        ctx.globalAlpha = alpha;
         ctx.fill();
-        // The ring carries the node's own colour — amber still means disputed
-        // while the fill is showing the connection — at the node's own transparency.
-        /* Every node has a solid ring, whatever its fill is doing: a see-through
-           node still needs a definite edge, and that is what lets a fill sit at 26%
-           without the node becoming a smudge.
+        /* One alpha for the whole node, ring included: a node is at a weight or it
+           is not, and its outline is part of it. Forcing the ring to full opacity
+           over a faded fill is what used to leave dimmed nodes reading as solid
+           discs — six hundred opaque outlines are six hundred solid shapes.
 
-           A disputed node is ringed in black. Inside the contested mass the fills
-           are light and crowded together, and an amber ring on an amber fill draws
-           no border at all — six hundred overlapping ambers read as one shape. A
+           Every node is ringed in black, whatever it is filled with. A ring in the
+           node's own colour draws no border at all against a fill of that colour,
+           so a crowd of them reads as one shape — which is what the contested mass
+           taught first, and is just as true of seven hundred touching blues. The
            dark outline is what separates them into countable things, and it reads
-           against the light core precisely where an amber ring disappears. */
-        ctx.strokeStyle = n.disputed ? "#05070b" : colour;
-        ctx.globalAlpha = 1;
+           against a light amber core and a solid blue alike. */
+        ctx.strokeStyle = NODE_EDGE_DARK;
+        ctx.globalAlpha = alpha;
         ctx.lineWidth = inConnection || on ? 2.5 : 1.5;
         ctx.stroke();
 
-        /* A solid orb in the connection's colour at the centre of the dark ones.
-           A black disc with a single outline is a hole, and six hundred holes is a
-           mesh; an orb gives the node a core to look at while the dark ring of
-           interior around it keeps the node an object rather than a lens.
-
-           It scales with the node, so a well-asserted entity carries a
-           proportionally larger core rather than the same dot at every size.
-
-           Only where the interior is actually dark: a node in the current
-           connection is already filled with this colour, so an orb of it would be
-           invisible, and a contested node has its lit amber fill instead. */
-        if (!n.disputed && !inConnection) {
-          ctx.beginPath();
-          ctx.arc(n.sx!, n.sy!, Math.max(1.6, n.sr! * 0.42), 0, Math.PI * 2);
-          ctx.fillStyle = edgeInk;
-          ctx.globalAlpha = 1;
-          ctx.fill();
-        }
         if (on) {                                   // selection ring
           ctx.beginPath();
           ctx.arc(n.sx!, n.sy!, n.sr! + 6, 0, Math.PI * 2);
@@ -966,8 +955,21 @@ export function KnowledgeGraph({ running = false }: { running?: boolean }) {
           {/* The settings bar. These are the model's own forces, not a view
               filter — what they change is where the nodes actually settle, which
               is why they are worth having: the right spacing for forty entities
-              is the wrong spacing for four hundred. */}
-          <div className="graph-forces">
+              is the wrong spacing for four hundred. Folded away until asked for,
+              because that is a workshop and the graph is the thing. */}
+          <button
+            className={`graph-forces-toggle${forcesOpen ? " on" : ""}`}
+            onClick={toggleForces}
+            aria-expanded={forcesOpen}
+            aria-controls="graph-forces"
+            title={forcesOpen
+              ? "Fold the settings away"
+              : "Open the forces that decide where the nodes settle"}
+          >
+            <span className="caret" aria-hidden="true">{forcesOpen ? "▾" : "▸"}</span>
+            {forcesOpen ? "hide settings" : "settings"}
+          </button>
+          <div className="graph-forces" id="graph-forces" hidden={!forcesOpen}>
             <label>
               <span>wire length<b>{forces.wire}</b></span>
               <input type="range" min={110} max={400} step={5} value={forces.wire}

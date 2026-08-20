@@ -124,6 +124,13 @@ export interface VitalsReport {
   depth: { "1": number; "2": number; "3": number; "4+": number };
   domains: { domain: string; claims: number; held: number }[];
   findings: { total: number; supported: number };
+  /** Corroboration of the claims a finding actually rests on — a different
+   *  question from corroboration across everything retrieved, most of which
+   *  nothing leans on. */
+  support: { load_bearing: number; corroborated: number };
+  /** The loop, counted: what the audit raised of its own answers, and how much
+   *  went out as research of its own rather than being noted and left. */
+  raised: { total: number; dispatched: number; folded: number };
   confidence: { n: number; mean: number; low: number; high: number };
 }
 export const getVitals = () => api<VitalsReport>("/api/vitals");

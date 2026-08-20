@@ -3,8 +3,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  ACTIVE_STATUSES, EventRecord, MissionSummary, SystemStatus,
-  getEvents, getStatus, groupByQuestion, listMissions, startMission,
+  ACTIVE_STATUSES, EventRecord, MissionSummary, SystemStatus, VitalsReport,
+  getEvents, getStatus, getVitals, groupByQuestion, listMissions, startMission,
 } from "@/lib/api";
 import { HowThisWorks } from "./components/HowThisWorks";
 import { ContextGraph } from "./components/ContextGraph";
@@ -53,6 +53,7 @@ export default function Board() {
   const [missions, setMissions] = useState<MissionSummary[]>([]);
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [events, setEvents] = useState<EventRecord[]>([]);
+  const [vitals, setVitals] = useState<VitalsReport | null>(null);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -64,6 +65,7 @@ export default function Board() {
       listMissions().then(setMissions).catch(() => {});
       getStatus().then(setStatus).catch(() => setStatus(null));
       getEvents(60).then(setEvents).catch(() => {});
+      getVitals().then(setVitals).catch(() => {});
     };
     load();
     const timer = setInterval(load, 2000);
@@ -80,9 +82,7 @@ export default function Board() {
   // per-mission counts — nothing is estimated.
   const sources = missions.reduce((n, m) => n + m.sources, 0);
   const claims = missions.reduce((n, m) => n + m.claims, 0);
-  const verified = missions.reduce((n, m) => n + m.verified, 0);
   const conflicted = missions.reduce((n, m) => n + m.conflicted, 0);
-  const answered = missions.filter((m) => m.has_recommendation).length;
   const running = missions.some((m) => ACTIVE_STATUSES.has(m.status));
   // Repeats of a question collapse into one entry showing the latest run.
   const asked = groupByQuestion(missions);
@@ -169,31 +169,54 @@ export default function Board() {
           the distribution charts can sit side by side in it. */}
       <div className="wall">
         <Panel title="How the research is holding up" className="vitals">
+          {/* What goes up front is what a Studio Head is deciding on.
+              These three used to be the share of claims corroborated, the share
+              disputed, and the share of questions that reached a recommendation.
+              All three measured the wrong thing: the first two describe the
+              corpus — thirty-five pages assert thirty-five different specifics,
+              so most claims are said once and almost none of those carry a
+              finding — and the third is throughput, near-constant by
+              construction. None of them answered "can I act on this?".
+
+              These do. Whether the findings rest on verified evidence, how well
+              corroborated the material under them is, and how much the system
+              found wanting in its own answers and went back out for. The raw
+              claim distribution is still here, in the chart below, which is
+              where a distribution belongs. */}
           <div className="ring-row">
             <Ring
-              value={verified} total={claims}
-              label="held up" tone="ok"
-              hint={`${verified} of ${claims} claims confirmed by more than one source`}
+              value={vitals?.findings.supported ?? 0} total={vitals?.findings.total ?? 0}
+              label="findings backed" tone="ok"
+              hint={`${vitals?.findings.supported ?? 0} of ${vitals?.findings.total ?? 0} findings rest on at least one verified claim`}
             />
             <Ring
-              value={conflicted} total={claims}
-              label="disputed" tone="warn"
-              hint={`${conflicted} kept as disagreements rather than resolved`}
+              value={vitals?.support.corroborated ?? 0} total={vitals?.support.load_bearing ?? 0}
+              label="two sources or more" tone=""
+              hint={`${vitals?.support.corroborated ?? 0} of the ${vitals?.support.load_bearing ?? 0} claims the answers actually rest on were said by more than one page`}
             />
             <Ring
-              value={answered} total={missions.length}
-              label="answered" tone=""
-              hint={`${answered} of ${missions.length} questions reached a recommendation`}
+              value={vitals?.raised.dispatched ?? 0} total={vitals?.raised.total ?? 0}
+              label="it asked itself" tone="loop"
+              hint={`${vitals?.raised.total ?? 0} shortfalls it found in its own answers · `
+                + `${vitals?.raised.dispatched ?? 0} researched as questions of their own, `
+                + `${vitals?.raised.folded ?? 0} folded back into the answer that raised them`}
             />
           </div>
           <RingLegend
             items={[
-              { tone: "ok", has: claims > 0, hint: `${verified} of ${claims} claims confirmed by more than one source` },
-              { tone: "warn", has: claims > 0, hint: `${conflicted} kept as disagreements rather than resolved` },
-              { tone: "", has: missions.length > 0, hint: `${answered} of ${missions.length} questions reached a recommendation` },
+              { tone: "ok", has: (vitals?.findings.total ?? 0) > 0,
+                hint: `${vitals?.findings.supported ?? 0} of ${vitals?.findings.total ?? 0} findings rest on at least one verified claim` },
+              { tone: "", has: (vitals?.support.load_bearing ?? 0) > 0,
+                hint: `${vitals?.support.corroborated ?? 0} of the ${vitals?.support.load_bearing ?? 0} claims the answers rest on were said by more than one page` },
+              { tone: "loop", has: (vitals?.raised.total ?? 0) > 0,
+                hint: `${vitals?.raised.total ?? 0} shortfalls it found in its own answers — ${vitals?.raised.dispatched ?? 0} went back out as research` },
             ]}
           />
+          {/* The disagreements are a count, not a share. As 3% of all claims they
+              read as a rounding error; as a number they read as what they are —
+              the times two credible sources disagreed and both were kept. */}
           <div className="readout-row">
+            <Readout n={conflicted} label="disagreements kept" tone="warn" />
             <Readout n={sources} label="sources read" />
             <Readout n={claims} label="claims made" />
             <Readout n={status?.episodic ?? 0} label="things it remembers" />

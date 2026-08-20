@@ -42,14 +42,33 @@ a:hover { text-decoration: underline; }
 .shell { max-width: 1440px; margin: 0 auto; padding: 0 24px 70px; }
 
 /* Header */
+/* The masthead is a title card, not a browser chrome bar. It sat as a 17px line
+   in the top-left corner beside a status chip, which is where a page puts a
+   utility label — and this is the name of the system, on the screen someone is
+   shown the product on. It scrolls away like everything else (the rail is what
+   is sticky), so the height costs nothing after the first look. */
 .masthead {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  padding: 22px 0 14px; border-bottom: 1px solid var(--line); margin-bottom: 24px;
-  flex-wrap: wrap;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 11px; padding: 40px 0 22px;
+  border-bottom: 1px solid var(--line); margin-bottom: 26px;
 }
-.masthead h1 { font-size: 17px; letter-spacing: 0.14em; margin: 0; font-weight: 700; }
-.masthead h1 a { color: var(--ink); }
-.masthead .sub { color: var(--muted); font-size: 13px; }
+.masthead h1 { margin: 0; font-weight: 700; line-height: 1.02; }
+.masthead h1 a { color: var(--ink); display: grid; gap: 9px; justify-items: center; }
+.masthead h1 a:hover { text-decoration: none; }
+.masthead h1 a:hover .system { color: var(--accent); }
+/* The suite mark: small, wide, quiet — it says which shelf this came off. */
+.masthead .suite {
+  font-size: 11px; letter-spacing: 0.42em; text-indent: 0.42em;
+  text-transform: uppercase; font-weight: 600; color: var(--muted);
+}
+/* And the system's own name, at the size the room reads. Tracking loosens as
+   type grows, so this carries less of it than the mark above it, not more. */
+.masthead .system {
+  display: block; font-size: clamp(30px, 5vw, 52px);
+  letter-spacing: 0.1em; text-indent: 0.1em; text-transform: uppercase;
+  color: var(--ink); transition: color var(--alive-panel, 240ms) ease;
+}
+.masthead .sub { color: var(--muted); font-size: 13px; max-width: 62ch; }
 .mode { display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--mono); font-size: 12px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
 
@@ -629,6 +648,13 @@ td.num { font-variant-numeric: tabular-nums; }
 }
 .hud-ring.ok .hr-arc { stroke: var(--good); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--good) 60%, transparent)); }
 .hud-ring.warn .hr-arc { stroke: var(--warn); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warn) 60%, transparent)); }
+/* The loop gets its own colour. Left on the default it drew in the same blue as
+   the ring beside it, and two different measurements reading as one colour is
+   two rings a viewer has to be told apart. Violet is already the engine's third
+   arc, so this borrows from the palette rather than adding to it — and it is
+   neither the good green nor the disputed amber, which is right: a question the
+   system raised of itself is not a verdict, it is the thing it did. */
+.hud-ring.loop .hr-arc { stroke: #9085e9; filter: drop-shadow(0 0 5px color-mix(in srgb, #9085e9 60%, transparent)); }
 .hr-mid {
   position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
@@ -641,12 +667,17 @@ td.num { font-variant-numeric: tabular-nums; }
 .rl-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; margin-top: 4px; }
 .ring-legend li.ok .rl-dot { background: var(--good); }
 .ring-legend li.warn .rl-dot { background: var(--warn); }
-.readout-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 14px; }
+.ring-legend li.loop .rl-dot { background: #9085e9; }
+/* Four figures now: the disagreements moved here from the ring row, where a
+   share read as a rounding error and a count reads as a decision that was made. */
+.readout-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 14px; }
+@media (max-width: 700px) { .readout-row { grid-template-columns: repeat(2, 1fr); } }
 .hud-readout {
   border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 1px;
 }
 .hud-readout b { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--ink); }
 .hud-readout span { font-size: 10.5px; color: var(--muted); letter-spacing: 0.04em; }
+.hud-readout.warn b { color: var(--warn); }
 .vitals-note { margin: 14px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
 
 /* The frame around the central instrument. */
@@ -905,41 +936,84 @@ td.num { font-variant-numeric: tabular-nums; }
    The ring is where the model's time actually went, arc by arc. It is a
    readout, not a sweep: it does not move unless the numbers moved. */
 .gemini-object.thinking { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.engine { display: flex; gap: 26px; flex-wrap: wrap; align-items: center; }
-.engine-ring { position: relative; width: 132px; height: 132px; flex: none; }
-.engine-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.engine-ring .track { fill: none; stroke: var(--line); stroke-width: 9; }
-.engine-ring .arc { fill: none; stroke-width: 9; stroke-linecap: butt; }
-.engine-ring .a0 { stroke: var(--accent); }
-.engine-ring .a1 { stroke: #4bc6a8; }
-.engine-ring .a2 { stroke: #9085e9; }
-.engine-ring .a3 { stroke: var(--warn); }
-.engine-ring .a4 { stroke: #d9737f; }
-.gemini-object.thinking .engine-ring .a0 { animation: engine-pulse 3.4s ease-in-out infinite; }
-@keyframes engine-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
-.engine-core {
-  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 1px;
-}
-.engine-core .n { font: 700 22px var(--mono); color: var(--ink); }
-.engine-core .l { font: 9.5px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 
-.engine-read { flex: 1; min-width: 260px; }
-.engine-now { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-2); }
-.engine-figs { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
-.engine-figs b { color: var(--ink); font-family: var(--mono); }
-.engine-roles { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 3px; }
-.engine-roles li { display: flex; align-items: baseline; gap: 9px; font-size: 12px; }
-.engine-roles .key { width: 8px; height: 8px; border-radius: 2px; flex: none; }
-.engine-roles .key.a0 { background: var(--accent); }
-.engine-roles .key.a1 { background: #4bc6a8; }
-.engine-roles .key.a2 { background: #9085e9; }
-.engine-roles .key.a3 { background: var(--warn); }
-.engine-roles .key.a4 { background: #d9737f; }
-.engine-roles .rn { color: var(--ink-2); min-width: 74px; }
-.engine-roles .rc, .engine-roles .rm { font: 10.5px var(--mono); color: var(--muted); }
-.engine-roles .rm { margin-left: auto; }
-.engine-foot { margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; }
-@media (prefers-reduced-motion: reduce) { .gemini-object.thinking .engine-ring .a0 { animation: none; } }
+/* --- the engine tape (components/GeminiObject.tsx) -------------------------
+   The panel is the record, not a chart of it. Each row is one recorded call
+   carrying the sentence that actually came back; opening it shows the exact
+   prompt and the exact response. Rows are rules rather than cards — seven cards
+   is a stack of boxes, seven ruled lines is a tape. */
+.engine-tape { list-style: none; margin: 0; padding: 0; }
+.engine-tape li { border-top: 1px solid var(--line); }
+.engine-tape li:first-child { border-top: 0; }
+
+.tape-row {
+  width: 100%; display: grid; grid-template-columns: 7px 74px 1fr auto;
+  align-items: baseline; gap: 11px; padding: 9px 2px;
+  background: none; border: 0; text-align: left; cursor: pointer; color: inherit;
+}
+.tape-row:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.tape-row .tick { width: 7px; height: 7px; border-radius: 2px; align-self: center; }
+.tape-row .what {
+  font: 10.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+}
+/* The model's own words, held to one line: the tape is for scanning, and the
+   whole response is one click away. */
+.tape-row .said {
+  font-size: 13px; color: var(--ink-2); line-height: 1.45;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tape-row:hover .said { color: var(--ink); }
+.engine-tape li.bad .said { color: var(--warn); }
+.tape-row .cost {
+  font: 10.5px var(--mono); color: var(--muted); white-space: nowrap;
+  display: flex; gap: 9px; align-items: baseline;
+}
+.tape-row .cost i { font-style: normal; opacity: 0.6; }
+.engine-tape li.open { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.engine-tape li.open .said { white-space: normal; }
+
+.tape-detail { padding: 2px 2px 14px 92px; }
+@media (max-width: 620px) { .tape-detail { padding-left: 18px; } }
+.td-head { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.tape-detail h4 {
+  margin: 12px 0 5px; font: 9.5px var(--mono); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); font-weight: 600;
+}
+.td-text {
+  margin: 0; max-height: 230px; overflow: auto;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px;
+  padding: 10px 12px; font: 11.5px/1.6 var(--mono); color: var(--ink-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+.td-wait { margin: 0; font: 11.5px var(--mono); color: var(--muted); }
+
+/* The arithmetic, at the weight it is worth: a hairline and a line of figures. */
+.engine-standing { margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line); }
+.engine-hair { display: flex; height: 4px; border-radius: 999px; overflow: hidden; background: var(--line); gap: 1px; }
+.engine-hair .seg { display: block; height: 100%; min-width: 2px; }
+.engine-figs {
+  display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline;
+  margin: 11px 0 0; font-size: 12.5px; color: var(--muted);
+}
+.engine-figs b { color: var(--ink); font-family: var(--mono); font-size: 13.5px; }
+.engine-figs .rm { margin-left: auto; font: 11px var(--mono); opacity: 0.75; }
+.engine-foot { margin: 9px 0 0; font-size: 11.5px; line-height: 1.5; }
+
+.tape-row .tick.a0, .engine-hair .a0 { background: var(--accent); }
+.tape-row .tick.a1, .engine-hair .a1 { background: #4bc6a8; }
+.tape-row .tick.a2, .engine-hair .a2 { background: #9085e9; }
+.tape-row .tick.a3, .engine-hair .a3 { background: var(--warn); }
+.tape-row .tick.a4, .engine-hair .a4 { background: #d9737f; }
+
+/* Only the newest row moves, and only while something is running — the tape
+   arriving is the one thing on this panel that is genuinely live. */
+.gemini-object.thinking .engine-tape li:first-child .tick { animation: tape-tick 2.4s ease-out infinite; }
+@keyframes tape-tick {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .gemini-object.thinking .engine-tape li:first-child .tick { animation: none; } }
 
 
 /* --- nested questions (components/NestedQuestions.tsx) ---------------------
@@ -1421,11 +1495,29 @@ td.num { font-variant-numeric: tabular-nums; }
 /* --- the graph's force controls (components/KnowledgeGraph.tsx) -------------
    Set like instrument controls rather than a form: small, monospaced, current
    value beside its own name so a slider never has to be dragged to be read. */
+/* The settings fold. Eight sliders, two colour wells, a zoom, three arrangements
+   and a reset is a workshop sitting under the graph at all times, so it collapses
+   to this one line and the graph keeps the height. Styled like the entity index's
+   fold rather than the list's floating chip: both live in the flow under the
+   canvas, and two folds in the same place should look like the same control. */
+.graph-forces-toggle {
+  display: flex; align-items: center; gap: 7px; margin: 10px 0 0;
+  background: none; border: 0; padding: 4px 0; cursor: pointer;
+  font: 10.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted);
+}
+.graph-forces-toggle:hover, .graph-forces-toggle.on { color: var(--ink-2); }
+.graph-forces-toggle .caret { font-size: 9px; line-height: 1; color: var(--accent); }
+
 .graph-forces {
   display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
-  margin: 10px 0 4px; padding: 9px 11px;
+  margin: 6px 0 4px; padding: 9px 11px;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
 }
+/* `hidden` hides by way of `display: none` in the UA sheet, which an author
+   `display: flex` outranks — so the attribute went on, the panel stayed on
+   screen, and the fold folded nothing. Same trap the entity index hit. */
+.graph-forces[hidden] { display: none; }
 .graph-forces label { display: grid; gap: 3px; min-width: 132px; }
 .graph-forces span {
   display: flex; justify-content: space-between; gap: 10px;
