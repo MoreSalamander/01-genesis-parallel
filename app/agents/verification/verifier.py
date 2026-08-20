@@ -8,8 +8,15 @@ so LIVE mode cannot hand-wave a status:
     contradiction in group      → CONFLICTED (disagreement preserved, §6)
     ≥2 distinct sources agree   → VERIFIED
     otherwise                   → UNVERIFIED
+
+Verification runs again after every round of nested questions, over the whole
+evidence list — corroboration a raised question brought back has to meet the
+claim it was raised about. So a re-run replaces the picture rather than layering
+a second one over it; see `verify`.
 """
 from __future__ import annotations
+
+from collections import Counter
 
 from app.events.bus import EventBus
 from app.models.evidence import Claim, Mission, VerificationStatus
@@ -27,6 +34,30 @@ class VerificationAgent:
     def verify(self, mission: Mission) -> None:
         if not mission.evidence:
             return
+
+        # A second pass used to append beside the first, so the same fact stood
+        # twice with the stale copy keeping the status it had before the
+        # corroboration arrived: "Spain offers up to a 30% rebate" read
+        # UNVERIFIED (1 source) next to VERIFIED (5 sources). The coverage audit
+        # then read the stale copy, called the finding unsupported, and spent
+        # another metered question re-asking what the last round had answered.
+        #
+        # Claim identity has to survive the rebuild. The world model upserts an
+        # assertion by claim_id (knowledge/store.ingest_mission), so re-issuing a
+        # claim with a fresh id would leave the previous promotion standing
+        # beside it — the same duplication, one level down. Evidence ids are
+        # stable across rounds, so a rebuilt group inherits the id of whichever
+        # previous claim held most of its members, and each id is inherited at
+        # most once so a group that splits cannot produce two claims sharing one.
+        previous: dict[str, str] = {}
+        for claim in mission.claims:
+            for evidence_id in claim.evidence_ids:
+                previous[evidence_id] = claim.id
+        inherited: set[str] = set()
+        mission.claims = []
+        for item in mission.evidence:
+            item.verification_status = VerificationStatus.UNVERIFIED
+
         source_by_id = {s.id: s for s in mission.sources}
         payload_claims = [
             {
@@ -51,6 +82,10 @@ class VerificationAgent:
             else:
                 status = VerificationStatus.UNVERIFIED
 
+            carried = Counter(
+                previous[m.id] for m in members
+                if m.id in previous and previous[m.id] not in inherited
+            )
             claim = Claim(
                 text=group.get("claim", members[0].claim_text),
                 entity=group.get("entity", ""),
@@ -59,6 +94,9 @@ class VerificationAgent:
                 status=status,
                 conflict_detail=group.get("contradiction_detail", ""),
             )
+            if carried:
+                claim.id = carried.most_common(1)[0][0]
+                inherited.add(claim.id)
             for member in members:
                 member.verification_status = status
             mission.claims.append(claim)

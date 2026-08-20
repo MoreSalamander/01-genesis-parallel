@@ -242,6 +242,25 @@ def docs_page(slug: str) -> dict:
     }
 
 
+def _raised_tally(runtime) -> dict:
+    """Nested questions: how many the audit raised, and how many were researched.
+
+    Read from the graph rather than from missions carrying `raised_by` — a question
+    is recorded the moment it is raised, and only the dispatched ones become
+    missions. Counting missions would report a fraction of what the loop did.
+    """
+    try:
+        questions = runtime.knowledge.nested_questions(limit=1000)
+    except Exception:      # a graph outage must not take the whole panel down
+        return {"total": 0, "dispatched": 0, "folded": 0}
+    dispatched = sum(1 for q in questions if q.get("answered_by"))
+    return {
+        "total": len(questions),
+        "dispatched": dispatched,
+        "folded": len(questions) - dispatched,
+    }
+
+
 @router.get("/vitals")
 def vitals() -> dict:
     """How the research is holding up, in the shapes it actually has.
@@ -265,6 +284,12 @@ def vitals() -> dict:
     depth = {"1": 0, "2": 0, "3": 0, "4+": 0}
     by_domain: dict[str, dict[str, int]] = {}
     findings_total = findings_supported = 0
+    # The corroboration of the material the answers actually stand on, which is a
+    # different question from the corroboration of everything retrieved. Most
+    # claims are said by one page because thirty-five pages assert thirty-five
+    # different specifics, and almost none of those carry a finding — so counting
+    # them all together describes the corpus rather than the answer.
+    load_bearing = load_bearing_corroborated = 0
     confidence: list[float] = []
 
     for mission in missions:
@@ -275,6 +300,16 @@ def vitals() -> dict:
             c.id for c in mission.claims
             if c.status in (VerificationStatus.VERIFIED, VerificationStatus.CONFLICTED)
         }
+        claim_by_id = {c.id: c for c in mission.claims}
+        # A claim counts once however many findings lean on it: this is "how well
+        # supported is what the answer rests on", not "how often was it cited".
+        for claim_id in {cid for f in mission.findings for cid in f.claim_ids}:
+            claim = claim_by_id.get(claim_id)
+            if claim is None:
+                continue
+            load_bearing += 1
+            if claim.corroborating_sources > 1:
+                load_bearing_corroborated += 1
         for claim in mission.claims:
             if claim.status == VerificationStatus.VERIFIED:
                 verified += 1
@@ -311,6 +346,10 @@ def vitals() -> dict:
             for name, v in sorted(by_domain.items())
         ],
         "findings": {"total": findings_total, "supported": findings_supported},
+        "support": {"load_bearing": load_bearing, "corroborated": load_bearing_corroborated},
+        # The loop, counted: what the audit raised of its own answers, and how much
+        # of it went out as research rather than being noted and left.
+        "raised": _raised_tally(runtime),
         "confidence": {
             "n": len(confidence),
             "mean": round(sum(confidence) / len(confidence), 3) if confidence else 0.0,

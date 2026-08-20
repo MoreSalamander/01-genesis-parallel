@@ -684,3 +684,35 @@ def test_a_rate_limited_call_is_waited_out_not_treated_as_exhaustion():
     waits = GeminiCognition._RATE_BACKOFF_S
     assert len(waits) >= 2 and list(waits) == sorted(waits), "backoff must grow"
     assert sum(waits) >= 60, "the waits must outlast a per-minute ceiling"
+
+
+def test_findings_are_replaced_when_synthesis_reruns():
+    """Prevents: superseded findings accumulating across deepening rounds.
+
+    Each round re-synthesises because the last answer fell short, so the new
+    findings are that answer — not an addition to it. Appending left the earlier
+    drafts on the mission, still pointing at the claims they were written against,
+    with the recommendation citing all of them; the coverage audit then counted a
+    finding a later round had already supported as a place where the chain runs out.
+    """
+    from app.agents.strategic.strategist import StrategicCognition
+    from app.config import settings
+    from app.events.bus import EventBus
+    from app.models.evidence import Claim, Mission, VerificationStatus
+    from app.tools.google.gemini import MockCognition
+
+    mission = Mission(objective="Find emerging production companies worth monitoring")
+    mission.claims.append(Claim(text="Meridian Forge Studios raised a $40M Series A",
+                                entity="Meridian Forge Studios",
+                                corroborating_sources=2,
+                                status=VerificationStatus.VERIFIED))
+
+    strategist = StrategicCognition(MockCognition(), EventBus(settings.data_dir))
+    strategist.assess(mission)
+    first = len(mission.findings)
+    assert first
+
+    strategist.assess(mission)
+    assert len(mission.findings) == first, "the second assessment appended instead of replacing"
+    live = {f.id for f in mission.findings}
+    assert set(mission.recommendation.finding_ids) <= live, "recommendation cites a superseded finding"

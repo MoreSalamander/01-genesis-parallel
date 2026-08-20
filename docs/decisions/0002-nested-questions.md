@@ -64,6 +64,14 @@ stopped. A system whose thesis is that evidence decides cannot ship that.
   `app/tools/google/gemini.py`). Vertex returns 429 RESOURCE_EXHAUSTED for a per-minute
   ceiling and a spent budget alike, and with no retry a transient limit killed a whole
   mission's work.
+- Verification and synthesis are idempotent over a mission. Both run again on every
+  round, and both used to append: the same fact stood twice with the older copy keeping
+  the status it held before the corroboration arrived, and superseded findings stayed on
+  the mission with the recommendation citing them. A re-run now replaces its own previous
+  output, and a rebuilt claim inherits the id of whichever earlier claim held most of its
+  evidence — the world model promotes by `claim_id`, so a fresh id would have moved the
+  duplication one level down rather than fixed it. `ops/collapse_reverified_claims.py`
+  puts already-stored missions into the state one pass would have produced.
 - Promotion into the world model upserts on `claim_id`. `_build_knowledge` runs again on every
   round, and appending blindly made one claim into two, three, four things the studio believed.
 

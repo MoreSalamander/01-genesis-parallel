@@ -33,6 +33,15 @@ class StrategicCognition:
             {"objective": mission.objective, "claims": payload_claims},
         )
 
+        # Assessment re-runs after every round of nested questions, and the round
+        # exists precisely because the last answer fell short — so this replaces
+        # that answer rather than adding to it. Appending kept the superseded
+        # findings on the mission, still pointing at the claims they were written
+        # against, and the recommendation went on citing them; the coverage audit
+        # then counted a finding that a later round had already supported as a
+        # place where the chain runs out.
+        mission.findings = []
+
         for item in result.get("findings", []):
             try:
                 domain = Domain(item.get("domain", "strategic").strip().lower())

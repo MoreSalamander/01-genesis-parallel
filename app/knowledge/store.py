@@ -190,6 +190,32 @@ class LocalGraphStore:
             for evidence_id in claim.evidence_ids:
                 self._relate("evidence", evidence_id, "supports", "claim", claim.id, mission.id)
 
+        # What this mission no longer claims, the world model must stop holding.
+        # Re-verification can drop a claim (its group merged into another) or
+        # demote one to UNVERIFIED, and neither is expressible by upserting alone
+        # — the assertion promoted last round would simply stay, so the studio
+        # would go on believing something the evidence no longer supports. Only
+        # this mission's own assertions are touched; what another mission
+        # confirmed about the same entity is not this mission's to withdraw.
+        live_claims = {claim.id for claim in mission.claims
+                       if claim.status != VerificationStatus.UNVERIFIED}
+        for name, record in list(entities.items()):
+            assertions = record.get("assertions", [])
+            kept = [a for a in assertions
+                    if a.get("mission_id") != mission.id or a.get("claim_id") in live_claims]
+            if len(kept) == len(assertions):
+                continue
+            record["assertions"] = kept
+            touched.add(name)
+            if not kept:
+                # Nothing is asserted about it any more, by anyone. Left in place
+                # it is a node in the world model with nothing underneath — which
+                # is also precisely what the coverage audit reads as an entity
+                # the studio has nothing confirmed about, and would send a
+                # researcher back out after.
+                entities.pop(name, None)
+                touched.discard(name)
+
         for evidence in mission.evidence:
             self._relate("source", evidence.source_id, "produced", "evidence", evidence.id, mission.id)
         for finding in mission.findings:
